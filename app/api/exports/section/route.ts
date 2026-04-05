@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
 import { buildAccountingWorkbook } from "@/lib/accounting/excel";
-import { asNumber } from "@/lib/accounting/math";
+import { asNumber, round2 } from "@/lib/accounting/math";
 import { buildSimplePdf } from "@/lib/accounting/pdf";
 import {
   buildBalanceSheet,
@@ -24,7 +24,7 @@ import {
   parseTaxYear,
   resolveReportPeriod
 } from "@/lib/data/period";
-import { prisma } from "@/lib/db";
+import { PAYROLL_PRISMA_NOT_READY, isPayrollPrismaReady, prisma } from "@/lib/db";
 import { type Jurisdiction } from "@/lib/domain/enums";
 import { isExportSection, type ExportSection } from "@/lib/exports/sections";
 import { getTaxEngine } from "@/lib/tax/engines";
@@ -394,6 +394,310 @@ const buildTransactionsExport = async (): Promise<ExportResult> => {
   };
 };
 
+const buildSalariesExport = async (params: URLSearchParams): Promise<ExportResult> => {
+  const business = await ensureBusiness();
+  if (!isPayrollPrismaReady()) {
+    return {
+      section: "salaries",
+      title: "Salaries Export",
+      subtitle: business.name,
+      tables: [
+        {
+          name: "Status",
+          rows: [{ Message: PAYROLL_PRISMA_NOT_READY }]
+        }
+      ]
+    };
+  }
+
+  const fiscalYearStartMonth = getFiscalYearStartMonth(business.fiscalYearStart);
+  const selectedYear = parseTaxYear(params.get("year"));
+  const selectedYearPeriod = selectedYear ? fiscalYearPeriod(selectedYear, fiscalYearStartMonth) : null;
+  const from = selectedYearPeriod?.from ?? parseDateParam(params.get("from"));
+  const to = selectedYearPeriod?.to ?? parseDateParam(params.get("to"), true);
+
+  const [employees, salaryEntries, expenseClaims] = await Promise.all([
+    prisma.employee.findMany({
+      where: { businessId: business.id },
+      orderBy: [{ status: "asc" }, { lastName: "asc" }, { firstName: "asc" }]
+    }),
+    prisma.salaryEntry.findMany({
+      where: {
+        businessId: business.id,
+        ...(from || to
+          ? {
+              payrollDate: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {})
+              }
+            }
+          : {})
+      },
+      include: {
+        employee: {
+          select: {
+            firstName: true,
+            lastName: true,
+            employeeNumber: true
+          }
+        }
+      },
+      orderBy: [{ payrollDate: "asc" }, { createdAt: "asc" }],
+      take: 5000
+    }),
+    prisma.employeeExpense.findMany({
+      where: {
+        businessId: business.id,
+        ...(from || to
+          ? {
+              expenseDate: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {})
+              }
+            }
+          : {})
+      },
+      include: {
+        employee: {
+          select: {
+            firstName: true,
+            lastName: true,
+            employeeNumber: true
+          }
+        }
+      },
+      orderBy: [{ expenseDate: "asc" }, { createdAt: "asc" }],
+      take: 5000
+    })
+  ]);
+
+  const runningSalaryRows: Array<Record<string, CellValue>> = [];
+  let cumulativeGross = 0;
+  let cumulativeTax = 0;
+  let cumulativeEmployer = 0;
+  let cumulativePension = 0;
+  let cumulativeNet = 0;
+
+  for (const entry of salaryEntries) {
+    cumulativeGross += asNumber(entry.taxableGross);
+    cumulativeTax += asNumber(entry.preliminaryTaxAmount);
+    cumulativeEmployer += asNumber(entry.employerContributionAmount);
+    cumulativePension += asNumber(entry.pensionAmount);
+    cumulativeNet += asNumber(entry.netSalary);
+    runningSalaryRows.push({
+      PayrollDate: dateIso(entry.payrollDate),
+      Employee: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
+      EmployeeNumber: entry.employee.employeeNumber ?? null,
+      SalaryEntryId: entry.id,
+      GrossThisEntry: asNumber(entry.taxableGross),
+      TaxThisEntry: asNumber(entry.preliminaryTaxAmount),
+      EmployerContributionThisEntry: asNumber(entry.employerContributionAmount),
+      PensionThisEntry: asNumber(entry.pensionAmount),
+      NetThisEntry: asNumber(entry.netSalary),
+      RunningGrossTotal: round2(cumulativeGross),
+      RunningTaxTotal: round2(cumulativeTax),
+      RunningEmployerContributionTotal: round2(cumulativeEmployer),
+      RunningPensionTotal: round2(cumulativePension),
+      RunningNetTotal: round2(cumulativeNet)
+    });
+  }
+
+  const employeeTotalsMap = new Map<
+    string,
+    {
+      employeeId: string;
+      employee: string;
+      employeeNumber: string | null;
+      salaryGross: number;
+      salaryTax: number;
+      salaryEmployer: number;
+      salaryPension: number;
+      salaryNet: number;
+      salaryCount: number;
+      expenseGross: number;
+      expenseVat: number;
+      expenseNet: number;
+      expenseCount: number;
+    }
+  >();
+
+  for (const employee of employees) {
+    employeeTotalsMap.set(employee.id, {
+      employeeId: employee.id,
+      employee: `${employee.firstName} ${employee.lastName}`.trim(),
+      employeeNumber: employee.employeeNumber ?? null,
+      salaryGross: 0,
+      salaryTax: 0,
+      salaryEmployer: 0,
+      salaryPension: 0,
+      salaryNet: 0,
+      salaryCount: 0,
+      expenseGross: 0,
+      expenseVat: 0,
+      expenseNet: 0,
+      expenseCount: 0
+    });
+  }
+
+  for (const entry of salaryEntries) {
+    const totals = employeeTotalsMap.get(entry.employeeId);
+    if (!totals) continue;
+    totals.salaryGross += asNumber(entry.taxableGross);
+    totals.salaryTax += asNumber(entry.preliminaryTaxAmount);
+    totals.salaryEmployer += asNumber(entry.employerContributionAmount);
+    totals.salaryPension += asNumber(entry.pensionAmount);
+    totals.salaryNet += asNumber(entry.netSalary);
+    totals.salaryCount += 1;
+  }
+
+  for (const entry of expenseClaims) {
+    const totals = employeeTotalsMap.get(entry.employeeId);
+    if (!totals) continue;
+    totals.expenseGross += asNumber(entry.grossAmount);
+    totals.expenseVat += asNumber(entry.vatAmount);
+    totals.expenseNet += asNumber(entry.netAmount);
+    totals.expenseCount += 1;
+  }
+
+  const totalsRows = [...employeeTotalsMap.values()].map((totals) => ({
+    Employee: totals.employee,
+    EmployeeNumber: totals.employeeNumber,
+    SalaryGrossTotal: round2(totals.salaryGross),
+    SalaryTaxTotal: round2(totals.salaryTax),
+    SalaryEmployerContributionTotal: round2(totals.salaryEmployer),
+    SalaryPensionTotal: round2(totals.salaryPension),
+    SalaryNetTotal: round2(totals.salaryNet),
+    SalaryRunCount: totals.salaryCount,
+    ExpenseGrossTotal: round2(totals.expenseGross),
+    ExpenseVatTotal: round2(totals.expenseVat),
+    ExpenseNetTotal: round2(totals.expenseNet),
+    ExpenseCount: totals.expenseCount
+  }));
+
+  const overallTotals = totalsRows.reduce(
+    (accumulator, row) => {
+      accumulator.SalaryGrossTotal += asNumber(row.SalaryGrossTotal);
+      accumulator.SalaryTaxTotal += asNumber(row.SalaryTaxTotal);
+      accumulator.SalaryEmployerContributionTotal += asNumber(row.SalaryEmployerContributionTotal);
+      accumulator.SalaryPensionTotal += asNumber(row.SalaryPensionTotal);
+      accumulator.SalaryNetTotal += asNumber(row.SalaryNetTotal);
+      accumulator.ExpenseGrossTotal += asNumber(row.ExpenseGrossTotal);
+      accumulator.ExpenseVatTotal += asNumber(row.ExpenseVatTotal);
+      accumulator.ExpenseNetTotal += asNumber(row.ExpenseNetTotal);
+      return accumulator;
+    },
+    {
+      SalaryGrossTotal: 0,
+      SalaryTaxTotal: 0,
+      SalaryEmployerContributionTotal: 0,
+      SalaryPensionTotal: 0,
+      SalaryNetTotal: 0,
+      ExpenseGrossTotal: 0,
+      ExpenseVatTotal: 0,
+      ExpenseNetTotal: 0
+    }
+  );
+
+  return {
+    section: "salaries",
+    title: "Salaries Export",
+    subtitle: `${business.name}${
+      selectedYear
+        ? ` | Tax Year ${formatTaxYearLabel(selectedYear, fiscalYearStartMonth)}`
+        : from || to
+          ? ` | ${dateIso(from)} to ${dateIso(to)}`
+          : ""
+    }`,
+    tables: [
+      {
+        name: "Employees",
+        rows: employees.map((employee) => ({
+          Employee: `${employee.firstName} ${employee.lastName}`.trim(),
+          EmployeeNumber: employee.employeeNumber ?? null,
+          PersonalNumber: employee.personalNumber,
+          Email: employee.email ?? null,
+          Phone: employee.phone ?? null,
+          TaxTable: employee.taxTable ?? null,
+          PreliminaryTaxRate: asNumber(employee.preliminaryTaxRate),
+          EmployerContributionRate: asNumber(employee.employerContributionRate),
+          PensionRate: asNumber(employee.pensionRate),
+          BankAccountName: employee.bankAccountName ?? null,
+          BankClearingNumber: employee.bankClearingNumber ?? null,
+          BankAccountNumber: employee.bankAccountNumber ?? null,
+          IBAN: employee.iban ?? null,
+          BIC: employee.bic ?? null,
+          Status: employee.status
+        }))
+      },
+      {
+        name: "Salary Entries",
+        rows: salaryEntries.map((entry) => ({
+          PayrollDate: dateIso(entry.payrollDate),
+          PeriodFrom: dateIso(entry.periodFrom),
+          PeriodTo: dateIso(entry.periodTo),
+          Employee: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
+          EmployeeNumber: entry.employee.employeeNumber ?? null,
+          GrossSalary: asNumber(entry.grossSalary),
+          BonusAmount: asNumber(entry.bonusAmount),
+          OvertimeAmount: asNumber(entry.overtimeAmount),
+          BenefitsAmount: asNumber(entry.benefitsAmount),
+          TaxableGross: asNumber(entry.taxableGross),
+          PreliminaryTaxRate: asNumber(entry.preliminaryTaxRate),
+          PreliminaryTaxAmount: asNumber(entry.preliminaryTaxAmount),
+          EmployerContributionRate: asNumber(entry.employerContributionRate),
+          EmployerContributionAmount: asNumber(entry.employerContributionAmount),
+          PensionRate: asNumber(entry.pensionRate),
+          PensionAmount: asNumber(entry.pensionAmount),
+          NetSalary: asNumber(entry.netSalary),
+          Status: entry.status,
+          ApprovedAt: dateIso(entry.approvedAt),
+          PaidAt: dateIso(entry.paidAt),
+          PaymentReference: entry.paymentReference ?? null,
+          LedgerTransactionId: entry.transactionId ?? null
+        }))
+      },
+      {
+        name: "Running Salary Totals",
+        rows: runningSalaryRows
+      },
+      {
+        name: "Expense Claims",
+        rows: expenseClaims.map((entry) => ({
+          ExpenseDate: dateIso(entry.expenseDate),
+          Employee: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
+          EmployeeNumber: entry.employee.employeeNumber ?? null,
+          Category: entry.category,
+          Description: entry.description,
+          GrossAmount: asNumber(entry.grossAmount),
+          VatAmount: asNumber(entry.vatAmount),
+          NetAmount: asNumber(entry.netAmount),
+          Currency: entry.currency,
+          Status: entry.status,
+          ReceiptReference: entry.receiptReference ?? null,
+          PaymentReference: entry.paymentReference ?? null,
+          ApprovedAt: dateIso(entry.approvedAt),
+          PaidAt: dateIso(entry.paidAt),
+          LedgerTransactionId: entry.transactionId ?? null
+        }))
+      },
+      {
+        name: "Employee Totals",
+        rows: totalsRows
+      },
+      {
+        name: "Overall Totals",
+        rows: [
+          {
+            ...Object.fromEntries(
+              Object.entries(overallTotals).map(([key, value]) => [key, round2(value)])
+            )
+          }
+        ]
+      }
+    ]
+  };
+};
+
 const buildLedgerExport = async (params: URLSearchParams): Promise<ExportResult> => {
   const business = await ensureBusiness();
   const fiscalYearStartMonth = getFiscalYearStartMonth(business.fiscalYearStart);
@@ -425,39 +729,93 @@ const buildLedgerExport = async (params: URLSearchParams): Promise<ExportResult>
     take: 2000
   });
 
+  const ledgerRows = transactions.map((txn) => ({
+    Date: dateIso(txn.txnDate),
+    Description: txn.description,
+    Vendor: txn.receipt?.vendor ?? txn.paidInvoice?.customerName ?? null,
+    Direction: txn.direction,
+    GrossAmount: asNumber(txn.grossAmount),
+    NetAmount: asNumber(txn.netAmount),
+    VatAmount: asNumber(txn.vatAmount),
+    Currency: txn.currency,
+    Source: txn.source,
+    Reference: txn.reference ?? null,
+    Journal: txn.lines
+      .map((line) => {
+        const debit = asNumber(line.debit);
+        const credit = asNumber(line.credit);
+        const amount = debit > 0 ? `D ${debit.toFixed(2)}` : `C ${credit.toFixed(2)}`;
+        return `${line.account.code} ${amount}`;
+      })
+      .join(" | "),
+    LinkedReceiptId: txn.receiptId ?? null
+  }));
+
+  const totals = transactions.reduce(
+    (accumulator, txn) => {
+      const gross = asNumber(txn.grossAmount);
+      const net = asNumber(txn.netAmount);
+      const vat = asNumber(txn.vatAmount);
+
+      accumulator.totalGross += Number.isFinite(gross) ? gross : 0;
+      accumulator.totalNet += Number.isFinite(net) ? net : 0;
+      accumulator.totalVat += Number.isFinite(vat) ? vat : 0;
+
+      if (txn.direction === "INCOME") {
+        accumulator.revenue += Number.isFinite(net) ? net : 0;
+      } else if (txn.direction === "EXPENSE") {
+        accumulator.expenses += Number.isFinite(net) ? net : 0;
+      }
+
+      accumulator.currencies.add((txn.currency || "").toUpperCase());
+      return accumulator;
+    },
+    {
+      totalGross: 0,
+      totalNet: 0,
+      totalVat: 0,
+      revenue: 0,
+      expenses: 0,
+      currencies: new Set<string>()
+    }
+  );
+
+  const operatingProfit = totals.revenue - totals.expenses;
+  const currencyList = [...totals.currencies].filter(Boolean).sort();
+  const rangeLabel = selectedYear
+    ? `Tax Year ${formatTaxYearLabel(selectedYear, fiscalYearStartMonth)}`
+    : from || to
+      ? `${dateIso(from) ?? "-"} to ${dateIso(to) ?? "-"}`
+      : "All Dates";
+
   return {
     section: "ledger",
     title: "Ledger Export",
-    subtitle: `${business.name}${
-      selectedYear
-        ? ` | Tax Year ${formatTaxYearLabel(selectedYear, fiscalYearStartMonth)}`
-        : from || to
-          ? ` | ${dateIso(from)} to ${dateIso(to)}`
-          : ""
-    }`,
+    subtitle: `${business.name} | ${rangeLabel}${source ? ` | Source: ${source}` : ""}`,
     tables: [
       {
         name: "Ledger Entries",
-        rows: transactions.map((txn) => ({
-          Date: dateIso(txn.txnDate),
-          Description: txn.description,
-          Vendor: txn.receipt?.vendor ?? txn.paidInvoice?.customerName ?? null,
-          Direction: txn.direction,
-          GrossAmount: asNumber(txn.grossAmount),
-          VatAmount: asNumber(txn.vatAmount),
-          Currency: txn.currency,
-          Source: txn.source,
-          Reference: txn.reference ?? null,
-          Journal: txn.lines
-            .map((line) => {
-              const debit = asNumber(line.debit);
-              const credit = asNumber(line.credit);
-              const amount = debit > 0 ? `D ${debit.toFixed(2)}` : `C ${credit.toFixed(2)}`;
-              return `${line.account.code} ${amount}`;
-            })
-            .join(" | "),
-          LinkedReceiptId: txn.receiptId ?? null
-        }))
+        rows: ledgerRows
+      },
+      {
+        name: "Ledger Totals",
+        rows: [
+          {
+            EntryCount: ledgerRows.length,
+            TotalGrossAmount: totals.totalGross,
+            TotalNetAmount: totals.totalNet,
+            TotalVatAmount: totals.totalVat,
+            Currencies: currencyList.length > 0 ? currencyList.join(", ") : business.baseCurrency
+          }
+        ]
+      },
+      {
+        name: "Profit and Loss",
+        rows: [
+          { Metric: "Revenue (Net, INCOME)", Amount: totals.revenue },
+          { Metric: "Expenses (Net, EXPENSE)", Amount: totals.expenses },
+          { Metric: "Operating Profit/Loss", Amount: operatingProfit }
+        ]
       }
     ]
   };
@@ -713,6 +1071,8 @@ const buildExport = async (section: ExportSection, params: URLSearchParams): Pro
       return buildImportsExport();
     case "transactions":
       return buildTransactionsExport();
+    case "salaries":
+      return buildSalariesExport(params);
     case "ledger":
       return buildLedgerExport(params);
     case "review":

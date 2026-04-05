@@ -150,11 +150,12 @@ export const buildVatReport = async (period: PeriodInput) => {
   for (const transaction of transactions) {
     const vatAmount = asNumber(transaction.vatAmount as unknown as string | number);
     const netAmount = asNumber(transaction.netAmount as unknown as string | number);
+    const hasVat = vatAmount > 0;
 
-    if (transaction.direction === TransactionDirections.INCOME) {
+    if (transaction.direction === TransactionDirections.INCOME && hasVat) {
       outputVat = round2(outputVat + vatAmount);
       taxableSales = round2(taxableSales + netAmount);
-    } else if (transaction.direction === TransactionDirections.EXPENSE) {
+    } else if (transaction.direction === TransactionDirections.EXPENSE && hasVat) {
       inputVat = round2(inputVat + vatAmount);
       taxablePurchases = round2(taxablePurchases + netAmount);
     }

@@ -32,6 +32,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           transactions: "Bokförda transaktioner",
           receipts: "Lagrade kvitton",
           workflow: "Arbetsflöde",
+          exportAccounts: "Exportera hela bokföringen (Excel)",
           step1: "1. Ladda upp eller vidarebefordra kvitton på sidan Kvitton.",
           step2: "2. Importera bank-CSV för att bokföra kontantmetodstransaktioner automatiskt.",
           step3: "3. Skapa P&L, balansräkning, moms, skatteprognos och NE-utkast under Rapporter.",
@@ -52,6 +53,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           transactions: "Transactions Posted",
           receipts: "Receipts Stored",
           workflow: "Workflow Status",
+          exportAccounts: "Export Full Accounts (Excel)",
           step1: "1. Upload or forward receipts from the Receipts page.",
           step2: "2. Import bank CSV to auto-post cash-method transactions.",
           step3: "3. Generate P&L, Balance, VAT, Tax Estimate and NE-bilaga draft under Reports.",
@@ -110,6 +112,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {copy.taxYear} {taxYearLabel}
       </p>
       <SectionExportBar locale={locale} section="dashboard" params={{ year: String(selectedYear) }} />
+      <div className="row" id="dashboard-export-accounts">
+        <a className="button" href={`/api/exports/accounts?year=${selectedYear}`}>
+          {copy.exportAccounts}
+        </a>
+      </div>
 
       <article className="card" id="annual-books">
         <h2>{copy.annual}</h2>

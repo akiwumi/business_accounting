@@ -433,6 +433,42 @@ tr:last-child td {
   width: 100%;
 }
 
+.salariesManager {
+  min-width: 0;
+}
+
+.salariesManager > .card {
+  min-width: 0;
+  width: 100%;
+}
+
+.salariesManager .row > label.stack {
+  min-width: 0;
+  flex: 1 1 210px;
+}
+
+.salariesManager .tableWrap {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.salariesManager .ledgerTableWrap table {
+  min-width: 1160px;
+}
+
+.salariesManager .ledgerTableWrap td:first-child,
+.salariesManager .ledgerTableWrap td:nth-child(10) {
+  white-space: normal;
+  min-width: 200px;
+  overflow-wrap: anywhere;
+}
+
+.salariesManager .kpi {
+  font-size: clamp(1.2rem, 2.1vw, 1.66rem);
+  overflow-wrap: anywhere;
+}
+
 button,
 .button {
   border: 1px solid var(--accent);
@@ -728,6 +764,10 @@ pre {
     width: 68px;
     min-width: 68px;
   }
+
+  .salariesManager .row > label.stack {
+    flex: 1 1 calc(50% - 10px);
+  }
 }
 
 @media (max-width: 760px) {
@@ -802,5 +842,13 @@ pre {
 
   .receiptsTableWrap table {
     min-width: 900px;
+  }
+
+  .salariesManager .row > label.stack {
+    flex: 1 1 100%;
+  }
+
+  .salariesManager .ledgerTableWrap table {
+    min-width: 960px;
   }
 }

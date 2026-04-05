@@ -4,6 +4,7 @@ export const exportSections = [
   "invoices",
   "imports",
   "transactions",
+  "salaries",
   "ledger",
   "review",
   "reports",

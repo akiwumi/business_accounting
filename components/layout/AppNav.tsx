@@ -13,6 +13,7 @@ const links = [
   { href: "/invoices", icon: "IV", group: "main", labels: { en: "Invoices", sv: "Fakturor" } },
   { href: "/imports", icon: "BC", group: "main", labels: { en: "Bank CSV", sv: "Bank-CSV" } },
   { href: "/transactions", icon: "TX", group: "main", labels: { en: "Transactions", sv: "Transaktioner" } },
+  { href: "/salaries", icon: "SL", group: "main", labels: { en: "Salaries", sv: "Löner" } },
   { href: "/ledger", icon: "LG", group: "main", labels: { en: "Ledger", sv: "Huvudbok" } },
   { href: "/review", icon: "RV", group: "main", labels: { en: "Review", sv: "Granskning" } },
   // ── Swedish tax requirements ──────────────────────────────────────────

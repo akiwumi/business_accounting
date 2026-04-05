@@ -44,6 +44,16 @@ const tabs = {
     { href: "/transactions#add-payment", label: { en: "Add Payment", sv: "Lägg till betalning" } },
     { href: "/transactions#transaction-list", label: { en: "Transactions", sv: "Transaktioner" } }
   ],
+  salaries: [
+    { href: "/salaries#salary-management", label: { en: "Management", sv: "Hantering" } },
+    { href: "/salaries#salary-overview", label: { en: "Totals", sv: "Totaler" } },
+    { href: "/salaries#salary-employees-list", label: { en: "Employees", sv: "Anställda" } }
+  ],
+  salaryEmployee: [
+    { href: "/salaries#salary-management", label: { en: "All Employees", sv: "Alla anställda" } },
+    { href: "#salary-runs", label: { en: "Salary Runs", sv: "Lönekörningar" } },
+    { href: "#salary-expenses", label: { en: "Expenses", sv: "Utlägg" } }
+  ],
   ledger: [
     { href: "/ledger#ledger-filters", label: { en: "Filters", sv: "Filter" } },
     { href: "/ledger#ledger-entries", label: { en: "Entries", sv: "Poster" } }
@@ -89,6 +99,12 @@ const sections: SubNavConfig[] = [
     title: { en: "Transactions", sv: "Transaktioner" },
     tabs: tabs.transactions
   },
+  {
+    isMatch: (pathname) => pathname.startsWith("/salaries/"),
+    title: { en: "Employee Payroll", sv: "Löneprofil" },
+    tabs: tabs.salaryEmployee
+  },
+  { isMatch: (pathname) => pathname.startsWith("/salaries"), title: { en: "Salaries", sv: "Löner" }, tabs: tabs.salaries },
   { isMatch: (pathname) => pathname.startsWith("/ledger"), title: { en: "Ledger", sv: "Huvudbok" }, tabs: tabs.ledger },
   { isMatch: (pathname) => pathname.startsWith("/review"), title: { en: "Review", sv: "Granskning" }, tabs: tabs.review },
   { isMatch: (pathname) => pathname.startsWith("/reports"), title: { en: "Reports", sv: "Rapporter" }, tabs: tabs.reports },
