@@ -6,30 +6,46 @@ import { type Locale } from "@/lib/i18n/locale";
 
 const toISODate = (date: Date) => date.toISOString().slice(0, 10);
 
-const yearRange = (year: number) => ({
-  from: `${year}-01-01`,
-  to: `${year}-12-31`
-});
+const yearRange = (year: number, fiscalYearStartMonth: number) => {
+  const normalized = Number.isInteger(fiscalYearStartMonth) && fiscalYearStartMonth >= 1 && fiscalYearStartMonth <= 12
+    ? fiscalYearStartMonth
+    : 1;
+  const from = new Date(Date.UTC(year, normalized - 1, 1));
+  const to = new Date(Date.UTC(year + 1, normalized - 1, 0, 23, 59, 59, 999));
+  return {
+    from: toISODate(from),
+    to: toISODate(to)
+  };
+};
 
-const initialRange = (initialYear: number) => {
+const initialRange = (initialYear: number, fiscalYearStartMonth: number) => {
   if (Number.isInteger(initialYear)) {
-    return yearRange(initialYear);
+    return yearRange(initialYear, fiscalYearStartMonth);
   }
 
   const now = new Date();
+  const normalized = Number.isInteger(fiscalYearStartMonth) && fiscalYearStartMonth >= 1 && fiscalYearStartMonth <= 12
+    ? fiscalYearStartMonth
+    : 1;
+  const currentMonth = now.getUTCMonth() + 1;
+  const currentFiscalYear = currentMonth >= normalized ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
   return {
-    from: `${now.getUTCFullYear()}-01-01`,
-    to: `${now.getUTCFullYear()}-12-31`
+    from: toISODate(new Date(Date.UTC(currentFiscalYear, normalized - 1, 1))),
+    to: toISODate(new Date(Date.UTC(currentFiscalYear + 1, normalized - 1, 0, 23, 59, 59, 999)))
   };
 };
+
+const formatTaxYearLabel = (year: number, fiscalYearStartMonth: number) =>
+  fiscalYearStartMonth === 1 ? String(year) : `${year}/${year + 1}`;
 
 type ReportsRunnerProps = {
   locale: Locale;
   closedYears: number[];
+  fiscalYearStartMonth: number;
   initialYear: number;
 };
 
-export const ReportsRunner = ({ locale, closedYears, initialYear }: ReportsRunnerProps) => {
+export const ReportsRunner = ({ locale, closedYears, fiscalYearStartMonth, initialYear }: ReportsRunnerProps) => {
   const copy =
     locale === "sv"
       ? {
@@ -64,7 +80,7 @@ export const ReportsRunner = ({ locale, closedYears, initialYear }: ReportsRunne
         };
 
   const [selectedYear, setSelectedYear] = useState(String(initialYear));
-  const [range, setRange] = useState(initialRange(initialYear));
+  const [range, setRange] = useState(initialRange(initialYear, fiscalYearStartMonth));
   const [loadingKey, setLoadingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
@@ -107,14 +123,14 @@ export const ReportsRunner = ({ locale, closedYears, initialYear }: ReportsRunne
               const next = event.target.value;
               setSelectedYear(next);
               if (next) {
-                setRange(yearRange(Number(next)));
+                setRange(yearRange(Number(next), fiscalYearStartMonth));
               }
             }}
           >
             <option value="">{copy.customRange}</option>
             {closedYears.map((year) => (
               <option key={year} value={year}>
-                {year}
+                {formatTaxYearLabel(year, fiscalYearStartMonth)}
               </option>
             ))}
           </select>

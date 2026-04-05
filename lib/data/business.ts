@@ -1,4 +1,5 @@
 import { swedishSoleTraderDefaultAccounts } from "@/lib/accounting/chartOfAccounts";
+import { mergeBusinessWithLocalSettings, readLocalSettings } from "@/lib/data/localSettings";
 import { prisma } from "@/lib/db";
 import { Jurisdictions } from "@/lib/domain/enums";
 
@@ -11,7 +12,10 @@ export const ensureBusiness = async () => {
     }
   });
 
-  if (existing) return existing;
+  if (existing) {
+    const localSettings = await readLocalSettings();
+    return mergeBusinessWithLocalSettings(existing, localSettings);
+  }
 
   const business = await prisma.business.create({
     data: {
@@ -52,5 +56,6 @@ export const ensureBusiness = async () => {
     }
   });
 
-  return business;
+  const localSettings = await readLocalSettings();
+  return mergeBusinessWithLocalSettings(business, localSettings);
 };

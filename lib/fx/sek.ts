@@ -27,6 +27,38 @@ type ConvertToSekResult = {
 
 const fxCache = new Map<string, FxRateInfo>();
 const currencyCodeRegex = /^[A-Z]{3}$/;
+const supportedFxCurrencies = new Set([
+  "SEK",
+  "USD",
+  "EUR",
+  "GBP",
+  "NOK",
+  "DKK",
+  "CHF",
+  "PLN",
+  "CZK",
+  "HUF",
+  "RON",
+  "BGN",
+  "TRY",
+  "HRK",
+  "ISK",
+  "CAD",
+  "AUD",
+  "NZD",
+  "JPY",
+  "CNY",
+  "SGD",
+  "HKD",
+  "ZAR",
+  "BRL",
+  "MXN",
+  "INR",
+  "THB",
+  "AED",
+  "SAR",
+  "QAR"
+]);
 
 const toDateIso = (value: Date | string): string => {
   if (typeof value === "string") {
@@ -48,7 +80,8 @@ const toDateIso = (value: Date | string): string => {
 
 export const normalizeCurrency = (value?: string): SupportedCurrency => {
   const upper = (value || "SEK").trim().toUpperCase();
-  return currencyCodeRegex.test(upper) ? upper : "SEK";
+  if (!currencyCodeRegex.test(upper)) return "SEK";
+  return supportedFxCurrencies.has(upper) ? upper : "SEK";
 };
 
 const fetchRateToSek = async (currency: string, dateIso: string): Promise<FxRateInfo> => {

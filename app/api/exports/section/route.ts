@@ -15,6 +15,11 @@ import { ensureBusiness } from "@/lib/data/business";
 import {
   calendarMonthPeriod,
   calendarYearPeriod,
+  fiscalYearPeriod,
+  formatTaxYearLabel,
+  getFiscalYearEndMonth,
+  getFiscalYearStartMonth,
+  getLatestClosedTaxYear as getLatestClosedFiscalTaxYear,
   parseMonth,
   parseTaxYear,
   resolveReportPeriod
@@ -100,8 +105,10 @@ const tablesToPdfLines = (tables: ExportTable[]) => {
 
 const buildDashboardExport = async (params: URLSearchParams): Promise<ExportResult> => {
   const business = await ensureBusiness();
-  const selectedYear = parseTaxYear(params.get("year")) ?? new Date().getUTCFullYear() - 1;
-  const period = calendarYearPeriod(selectedYear);
+  const fiscalYearStartMonth = getFiscalYearStartMonth(business.fiscalYearStart);
+  const selectedYear = parseTaxYear(params.get("year")) ?? getLatestClosedFiscalTaxYear(fiscalYearStartMonth);
+  const period = fiscalYearPeriod(selectedYear, fiscalYearStartMonth);
+  const taxYearLabel = formatTaxYearLabel(selectedYear, fiscalYearStartMonth);
   const [summary, transactionCount, receiptCount] = await Promise.all([
     buildDashboardSummary({
       businessId: business.id,
@@ -141,7 +148,7 @@ const buildDashboardExport = async (params: URLSearchParams): Promise<ExportResu
   return {
     section: "dashboard",
     title: "Dashboard Export",
-    subtitle: `${business.name} | ${business.jurisdiction} | ${selectedYear}`,
+    subtitle: `${business.name} | ${business.jurisdiction} | ${taxYearLabel}`,
     tables: [
       {
         name: "Business",
@@ -158,9 +165,9 @@ const buildDashboardExport = async (params: URLSearchParams): Promise<ExportResu
       {
         name: "Summary",
         rows: [
-          { Metric: `Revenue (${selectedYear})`, Value: summary.revenue },
-          { Metric: `Expenses (${selectedYear})`, Value: summary.expenses },
-          { Metric: `Operating Profit (${selectedYear})`, Value: summary.operatingProfit },
+          { Metric: `Revenue (${taxYearLabel})`, Value: summary.revenue },
+          { Metric: `Expenses (${taxYearLabel})`, Value: summary.expenses },
+          { Metric: `Operating Profit (${taxYearLabel})`, Value: summary.operatingProfit },
           { Metric: "Estimated VAT Payable", Value: summary.vatPayable },
           { Metric: "Output VAT (Running)", Value: summary.vatOutput },
           { Metric: "Input VAT (Running)", Value: summary.vatInput },
@@ -389,8 +396,9 @@ const buildTransactionsExport = async (): Promise<ExportResult> => {
 
 const buildLedgerExport = async (params: URLSearchParams): Promise<ExportResult> => {
   const business = await ensureBusiness();
+  const fiscalYearStartMonth = getFiscalYearStartMonth(business.fiscalYearStart);
   const selectedYear = parseTaxYear(params.get("year"));
-  const selectedYearPeriod = selectedYear ? calendarYearPeriod(selectedYear) : null;
+  const selectedYearPeriod = selectedYear ? fiscalYearPeriod(selectedYear, fiscalYearStartMonth) : null;
   const from = selectedYearPeriod?.from ?? parseDateParam(params.get("from"));
   const to = selectedYearPeriod?.to ?? parseDateParam(params.get("to"), true);
   const source = params.get("source")?.trim();
@@ -422,7 +430,7 @@ const buildLedgerExport = async (params: URLSearchParams): Promise<ExportResult>
     title: "Ledger Export",
     subtitle: `${business.name}${
       selectedYear
-        ? ` | Tax Year ${selectedYear}`
+        ? ` | Tax Year ${formatTaxYearLabel(selectedYear, fiscalYearStartMonth)}`
         : from || to
           ? ` | ${dateIso(from)} to ${dateIso(to)}`
           : ""
@@ -513,7 +521,7 @@ const buildReviewExport = async (): Promise<ExportResult> => {
 
 const buildReportsExport = async (params: URLSearchParams): Promise<ExportResult> => {
   const business = await ensureBusiness();
-  const period = resolveReportPeriod(params);
+  const period = resolveReportPeriod(params, getFiscalYearStartMonth(business.fiscalYearStart));
 
   const [profitAndLoss, balanceSheet, vat, neDraft] = await Promise.all([
     buildProfitAndLoss({ businessId: business.id, ...period }),
@@ -590,10 +598,52 @@ const buildReportsExport = async (params: URLSearchParams): Promise<ExportResult
       },
       {
         name: "NE Draft",
-        rows: Object.entries(neDraft.lineItems).map(([line, amount]) => ({
-          Line: line,
-          Amount: amount
-        }))
+        rows: [
+          ...Object.entries(neDraft.incomeLines).map(([line, amount]) => ({
+            Section: "Income",
+            Line: line,
+            Amount: amount
+          })),
+          ...Object.entries(neDraft.expenseLines).map(([line, amount]) => ({
+            Section: "Expense",
+            Line: line,
+            Amount: amount
+          })),
+          { Section: "Totals", Line: "totalIncome", Amount: neDraft.totalIncome },
+          { Section: "Totals", Line: "totalExpenses", Amount: neDraft.totalExpenses },
+          { Section: "Result", Line: "R47_overskottUnderskott", Amount: neDraft.R47_overskottUnderskott },
+          { Section: "Result", Line: "R48_skattemassigResultat", Amount: neDraft.R48_skattemassigResultat },
+          {
+            Section: "Adjustment",
+            Line: "perisFond_withdrawal",
+            Amount: neDraft.taxAdjustments.perisFond_withdrawal
+          },
+          {
+            Section: "Adjustment",
+            Line: "perisFond_allocation",
+            Amount: neDraft.taxAdjustments.perisFond_allocation
+          },
+          {
+            Section: "Adjustment",
+            Line: "expFond_withdrawal",
+            Amount: neDraft.taxAdjustments.expFond_withdrawal
+          },
+          {
+            Section: "Adjustment",
+            Line: "expFond_allocation",
+            Amount: neDraft.taxAdjustments.expFond_allocation
+          },
+          {
+            Section: "Supplementary",
+            Line: "fixedAssetCount",
+            Amount: neDraft.supplementary.fixedAssetCount
+          },
+          {
+            Section: "Supplementary",
+            Line: "mileageDeduction",
+            Amount: neDraft.supplementary.mileageDeduction
+          }
+        ]
       }
     ]
   };
@@ -601,6 +651,8 @@ const buildReportsExport = async (params: URLSearchParams): Promise<ExportResult
 
 const buildSettingsExport = async (): Promise<ExportResult> => {
   const business = await ensureBusiness();
+  const fiscalYearStartMonth = getFiscalYearStartMonth(business.fiscalYearStart);
+  const fiscalYearEndMonth = getFiscalYearEndMonth(fiscalYearStartMonth);
 
   return {
     section: "settings",
@@ -617,6 +669,8 @@ const buildSettingsExport = async (): Promise<ExportResult> => {
             BookkeepingMethod: business.bookkeepingMethod,
             VatRegistered: business.vatRegistered,
             VatFrequency: business.vatFrequency,
+            FiscalYearStartMonth: fiscalYearStartMonth,
+            FiscalYearEndMonth: fiscalYearEndMonth,
             FiscalYearStart: dateIso(business.fiscalYearStart),
             BaseCurrency: business.baseCurrency,
             Locale: business.locale,

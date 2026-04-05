@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createCashMethodTransaction } from "@/lib/accounting/posting";
 import { asNumber, round2 } from "@/lib/accounting/math";
 import { ensureBusiness } from "@/lib/data/business";
+import { supportsReceiptItemPurchasedField } from "@/lib/data/receiptItemSupport";
 import { prisma } from "@/lib/db";
 import { EntrySources, TransactionDirections } from "@/lib/domain/enums";
 import { convertToSekAtDate, normalizeCurrency } from "@/lib/fx/sek";
@@ -25,6 +26,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const business = await ensureBusiness();
+  const canUseItemPurchased = await supportsReceiptItemPurchasedField();
   const payload = manualReceiptSchema.parse(await request.json());
 
   const txnDate = new Date(`${payload.receiptDate}T00:00:00.000Z`);
@@ -37,6 +39,7 @@ export async function POST(request: Request) {
   const direction = TransactionDirections.EXPENSE;
   const description =
     payload.description?.trim() || payload.vendor?.trim() || `Manual receipt ${payload.receiptDate}`;
+  const itemPurchased = payload.description?.trim() || null;
   const netAmountInput = round2(payload.grossAmount / (1 + payload.vatRate));
   const vatAmountInput = round2(payload.grossAmount - netAmountInput);
   const sourceCurrency = normalizeCurrency(payload.currency);
@@ -79,6 +82,7 @@ export async function POST(request: Request) {
       filePath: `manual://${Date.now()}`,
       receiptNumber: payload.receiptNumber?.trim() || undefined,
       vendor: payload.vendor?.trim() || undefined,
+      ...(canUseItemPurchased && itemPurchased ? { itemPurchased } : {}),
       receiptDate: txnDate,
       grossAmount: payload.grossAmount,
       netAmount: netAmountInput,

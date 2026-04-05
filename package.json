@@ -14,7 +14,8 @@
     "db:init": "[ -f prisma/dev.db ] || (prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script > prisma/init.sql && sqlite3 prisma/dev.db < prisma/init.sql)",
     "db:seed": "tsx prisma/seed.ts",
     "db:backfill-receipt-transactions": "tsx scripts/backfill-receipt-transactions.ts",
-    "db:reextract-receipts": "tsx scripts/reextract-receipts.ts"
+    "db:reextract-receipts": "tsx scripts/reextract-receipts.ts",
+    "db:migrate-swedish-tax": "tsx scripts/migrate-swedish-tax.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.19.1",

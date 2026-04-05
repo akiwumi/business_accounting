@@ -4,7 +4,7 @@ import { buildAccountingWorkbook } from "@/lib/accounting/excel";
 import { buildBalanceSheet, buildNeBilagaDraft, buildProfitAndLoss, buildVatReport } from "@/lib/accounting/reports";
 import { asNumber } from "@/lib/accounting/math";
 import { ensureBusiness } from "@/lib/data/business";
-import { resolveReportPeriod } from "@/lib/data/period";
+import { getFiscalYearStartMonth, resolveReportPeriod } from "@/lib/data/period";
 import { type Jurisdiction } from "@/lib/domain/enums";
 import { getTaxEngine } from "@/lib/tax/engines";
 
@@ -13,7 +13,10 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const business = await ensureBusiness();
-  const period = resolveReportPeriod(new URL(request.url).searchParams);
+  const period = resolveReportPeriod(
+    new URL(request.url).searchParams,
+    getFiscalYearStartMonth(business.fiscalYearStart)
+  );
   const [profitAndLoss, balanceSheet, vat, neDraft] = await Promise.all([
     buildProfitAndLoss({ businessId: business.id, ...period }),
     buildBalanceSheet({ businessId: business.id, ...period }),

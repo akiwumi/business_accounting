@@ -13,6 +13,7 @@ type ReceiptsPageProps = {
     year?: string;
     month?: string;
     q?: string;
+    view?: string;
   };
 };
 
@@ -44,6 +45,12 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
           actions: "Åtgärder",
           delete: "Radera",
           deleting: "Raderar...",
+          deleteSelected: "Radera markerade",
+          deletingSelected: "Raderar markerade...",
+          selectedCount: "Markerade",
+          selectAll: "Markera alla",
+          selectRow: "Markera rad",
+          deleteSelectedConfirm: "Radera alla markerade kvitton och tillhörande bokföringspost(er)?",
           review: "Granska",
           deleteConfirm: "Radera det här kvittot och tillhörande bokföringspost(er)?",
           deleteFailed: "Kunde inte radera kvittot.",
@@ -54,7 +61,10 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
           allMonths: "Alla månader",
           search: "Sök",
           searchPlaceholder: "Kvittonummer, leverantör eller filnamn",
-          filter: "Filtrera"
+          filter: "Filtrera",
+          showAllStored: "Visa alla lagrade kvitton",
+          showRecent: "Visa senaste kvitton",
+          allStored: "Alla lagrade kvitton"
         }
       : {
           title: "Receipt Capture",
@@ -80,6 +90,12 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
           actions: "Actions",
           delete: "Delete",
           deleting: "Deleting...",
+          deleteSelected: "Delete selected",
+          deletingSelected: "Deleting selected...",
+          selectedCount: "Selected",
+          selectAll: "Select all",
+          selectRow: "Select row",
+          deleteSelectedConfirm: "Delete all selected receipts and their linked ledger transaction(s)?",
           review: "Review",
           deleteConfirm: "Delete this receipt and its linked ledger transaction(s)?",
           deleteFailed: "Failed to delete receipt.",
@@ -90,10 +106,14 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
           allMonths: "All months",
           search: "Search",
           searchPlaceholder: "Receipt number, vendor or filename",
-          filter: "Filter"
+          filter: "Filter",
+          showAllStored: "Show all receipts stored",
+          showRecent: "Show recent receipts",
+          allStored: "All Receipts Stored"
         };
 
   const business = await ensureBusiness();
+  const isAllView = searchParams?.view === "all";
   const nowYear = new Date().getUTCFullYear();
   const minReceipt = await prisma.receipt.aggregate({
     where: { businessId: business.id },
@@ -111,40 +131,58 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
   const selectedMonth = parseMonth(searchParams?.month);
   const period = selectedMonth ? calendarMonthPeriod(selectedYear, selectedMonth) : calendarYearPeriod(selectedYear);
   const query = searchParams?.q?.trim() || "";
+  const buildViewHref = (nextView: "all" | "recent") => {
+    const params = new URLSearchParams();
+    if (nextView === "all") {
+      params.set("view", "all");
+    } else {
+      params.set("year", String(selectedYear));
+      if (selectedMonth) params.set("month", String(selectedMonth));
+    }
+    if (query) params.set("q", query);
+    const suffix = params.toString();
+    return suffix ? `/receipts?${suffix}` : "/receipts";
+  };
+
+  const whereAnd: Array<Record<string, unknown>> = [
+    ...(isAllView
+      ? []
+      : [
+          {
+            OR: [
+              {
+                receiptDate: {
+                  gte: period.from,
+                  lte: period.to
+                }
+              },
+              {
+                receiptDate: null,
+                createdAt: {
+                  gte: period.from,
+                  lte: period.to
+                }
+              }
+            ]
+          }
+        ]),
+    ...(query
+      ? [
+          {
+            OR: [
+              { receiptNumber: { contains: query } },
+              { vendor: { contains: query } },
+              { originalFileName: { contains: query } }
+            ]
+          }
+        ]
+      : [])
+  ];
 
   const receipts = await prisma.receipt.findMany({
     where: {
       businessId: business.id,
-      AND: [
-        {
-          OR: [
-            {
-              receiptDate: {
-                gte: period.from,
-                lte: period.to
-              }
-            },
-            {
-              receiptDate: null,
-              createdAt: {
-                gte: period.from,
-                lte: period.to
-              }
-            }
-          ]
-        },
-        ...(query
-          ? [
-              {
-                OR: [
-                  { receiptNumber: { contains: query } },
-                  { vendor: { contains: query } },
-                  { originalFileName: { contains: query } }
-                ]
-              }
-            ]
-          : [])
-      ]
+      ...(whereAnd.length > 0 ? { AND: whereAnd } : {})
     },
     include: {
       transactions: {
@@ -154,7 +192,7 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
     orderBy: {
       createdAt: "desc"
     },
-    take: 20
+    ...(isAllView ? {} : { take: 20 })
   });
 
   return (
@@ -167,47 +205,61 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
         params={{
           year: String(selectedYear),
           month: selectedMonth ? String(selectedMonth) : undefined,
-          q: query || undefined
+          q: query || undefined,
+          view: isAllView ? "all" : undefined
         }}
       />
 
       <article className="card" id="upload">
         <h2>{copy.uploadTitle}</h2>
-        <ReceiptUploadForm locale={locale} />
+        <ReceiptUploadForm
+          locale={locale}
+          activeYear={selectedYear}
+          activeMonth={selectedMonth ?? null}
+        />
       </article>
 
       <article className="card" id="manual-entry">
         <h2>{copy.manualTitle}</h2>
-        <ManualReceiptForm locale={locale} />
+        <ManualReceiptForm
+          locale={locale}
+          activeYear={selectedYear}
+          activeMonth={selectedMonth ?? null}
+        />
       </article>
 
       <article className="card" id="receipt-filters">
         <h2>{copy.filterTitle}</h2>
         <form className="row" method="get">
-          <label className="stack">
-            {copy.year}
-            <select name="year" defaultValue={String(selectedYear)}>
-              {yearOptions.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </label>
+          {isAllView ? <input type="hidden" name="view" value="all" /> : null}
+          {!isAllView && (
+            <label className="stack">
+              {copy.year}
+              <select name="year" defaultValue={String(selectedYear)}>
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
-          <label className="stack">
-            {copy.month}
-            <select name="month" defaultValue={selectedMonth ? String(selectedMonth) : ""}>
-              <option value="">{copy.allMonths}</option>
-              {Array.from({ length: 12 }).map((_value, index) => (
-                <option key={index + 1} value={index + 1}>
-                  {new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { month: "long" }).format(
-                    new Date(Date.UTC(2026, index, 1))
-                  )}
-                </option>
-              ))}
-            </select>
-          </label>
+          {!isAllView && (
+            <label className="stack">
+              {copy.month}
+              <select name="month" defaultValue={selectedMonth ? String(selectedMonth) : ""}>
+                <option value="">{copy.allMonths}</option>
+                {Array.from({ length: 12 }).map((_value, index) => (
+                  <option key={index + 1} value={index + 1}>
+                    {new Intl.DateTimeFormat(locale === "sv" ? "sv-SE" : "en-GB", { month: "long" }).format(
+                      new Date(Date.UTC(2026, index, 1))
+                    )}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="stack" style={{ minWidth: 260 }}>
             {copy.search}
@@ -221,7 +273,12 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
       </article>
 
       <article className="card" id="recent-receipts">
-        <h2>{copy.recent}</h2>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <h2>{isAllView ? copy.allStored : copy.recent}</h2>
+          <a className="button secondary" href={buildViewHref(isAllView ? "recent" : "all")}>
+            {isAllView ? copy.showRecent : copy.showAllStored}
+          </a>
+        </div>
         <ReceiptsTable
           locale={locale}
           rows={receipts.map((receipt) => ({
@@ -255,6 +312,12 @@ export default async function ReceiptsPage({ searchParams }: ReceiptsPageProps) 
             ready: copy.ready,
             delete: copy.delete,
             deleting: copy.deleting,
+            deleteSelected: copy.deleteSelected,
+            deletingSelected: copy.deletingSelected,
+            selectedCount: copy.selectedCount,
+            selectAll: copy.selectAll,
+            selectRow: copy.selectRow,
+            deleteSelectedConfirm: copy.deleteSelectedConfirm,
             review: copy.review,
             deleteConfirm: copy.deleteConfirm,
             deleteFailed: copy.deleteFailed,

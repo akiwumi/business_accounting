@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/db";
+import {
+  getFiscalYearForDate,
+  getLatestClosedTaxYear as getLatestClosedFiscalTaxYear,
+  normalizeFiscalYearStartMonth
+} from "@/lib/data/period";
 
-export const getLatestClosedTaxYear = () => new Date().getUTCFullYear() - 1;
+export const getLatestClosedTaxYear = (fiscalYearStartMonth = 1) =>
+  getLatestClosedFiscalTaxYear(normalizeFiscalYearStartMonth(fiscalYearStartMonth));
 
 const minDate = (dates: Array<Date | null>) =>
   dates.reduce<Date | null>((earliest, date) => {
@@ -9,8 +15,12 @@ const minDate = (dates: Array<Date | null>) =>
     return date < earliest ? date : earliest;
   }, null);
 
-export const getClosedTaxYearsForBusiness = async (businessId: string): Promise<number[]> => {
-  const latestClosed = getLatestClosedTaxYear();
+export const getClosedTaxYearsForBusiness = async (
+  businessId: string,
+  fiscalYearStartMonth = 1
+): Promise<number[]> => {
+  const normalizedStartMonth = normalizeFiscalYearStartMonth(fiscalYearStartMonth);
+  const latestClosed = getLatestClosedTaxYear(normalizedStartMonth);
   if (latestClosed < 1970) return [];
 
   const [txnAgg, receiptAgg, invoiceAgg] = await Promise.all([
@@ -35,7 +45,7 @@ export const getClosedTaxYearsForBusiness = async (businessId: string): Promise<
     invoiceAgg._min.issueDate
   ]);
 
-  const earliestYear = earliest ? earliest.getUTCFullYear() : latestClosed;
+  const earliestYear = earliest ? getFiscalYearForDate(earliest, normalizedStartMonth) : latestClosed;
   const startYear = Math.min(earliestYear, latestClosed);
   const years: number[] = [];
 

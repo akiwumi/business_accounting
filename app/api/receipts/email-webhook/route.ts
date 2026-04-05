@@ -7,11 +7,13 @@ import { NextResponse } from "next/server";
 import { createCashMethodTransaction } from "@/lib/accounting/posting";
 import { asNumber, round2 } from "@/lib/accounting/math";
 import { ensureBusiness } from "@/lib/data/business";
+import { supportsReceiptItemPurchasedField } from "@/lib/data/receiptItemSupport";
 import { prisma } from "@/lib/db";
 import { EntrySources, TransactionDirections } from "@/lib/domain/enums";
 import { convertToSekAtDate, normalizeCurrency } from "@/lib/fx/sek";
 import { extractReceiptData } from "@/lib/receipts/extract";
 import { accountCodeForCategory, normalizeReceiptCategory } from "@/lib/receipts/mapper";
+import { inferReceiptMimeType } from "@/lib/receipts/mime";
 
 type InboundAttachment = {
   Name?: string;
@@ -46,9 +48,10 @@ export async function POST(request: Request) {
   }
 
   const business = await ensureBusiness();
+  const canUseItemPurchased = await supportsReceiptItemPurchasedField();
   const fileBuffer = Buffer.from(attachment.Content, "base64");
   const originalFileName = attachment.Name ?? `email-receipt-${Date.now()}.bin`;
-  const mimeType = attachment.ContentType ?? "application/octet-stream";
+  const mimeType = inferReceiptMimeType(originalFileName, attachment.ContentType);
 
   await mkdir(uploadDir, { recursive: true });
   const fileName = `${Date.now()}-${randomUUID()}-${originalFileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
@@ -129,6 +132,11 @@ export async function POST(request: Request) {
 
   const normalizedCategory = normalizeReceiptCategory(extracted.category ?? payload.Subject);
   const category = normalizedCategory === "sales" ? "other" : normalizedCategory;
+  const rawItemPurchased = extracted.description?.trim();
+  const itemPurchased =
+    rawItemPurchased && !/^receipt from\s+/i.test(rawItemPurchased) && !/^imported from\s+/i.test(rawItemPurchased)
+      ? rawItemPurchased
+      : null;
 
   const receipt = await prisma.receipt.create({
     data: {
@@ -139,6 +147,7 @@ export async function POST(request: Request) {
       filePath,
       receiptNumber: extracted.receiptNumber,
       vendor: extracted.vendor,
+      ...(canUseItemPurchased && itemPurchased ? { itemPurchased } : {}),
       receiptDate: receiptDate ? new Date(`${receiptDate}T00:00:00.000Z`) : undefined,
       grossAmount,
       netAmount,
@@ -161,7 +170,13 @@ export async function POST(request: Request) {
     transaction = await createCashMethodTransaction({
       businessId: business.id,
       txnDate: receiptDate ? new Date(`${receiptDate}T00:00:00.000Z`) : new Date(),
-      description: extracted.description ?? extracted.vendor ?? extracted.receiptNumber ?? payload.Subject ?? originalFileName,
+      description:
+        itemPurchased ??
+        extracted.description ??
+        extracted.vendor ??
+        extracted.receiptNumber ??
+        payload.Subject ??
+        originalFileName,
       direction,
       grossAmount: postingGrossAmount,
       vatRate: vatRateForPosting,

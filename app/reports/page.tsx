@@ -1,6 +1,6 @@
 import { ReportsRunner } from "@/components/reports/ReportsRunner";
 import { ensureBusiness } from "@/lib/data/business";
-import { parseTaxYear } from "@/lib/data/period";
+import { getFiscalYearStartMonth, parseTaxYear } from "@/lib/data/period";
 import { getClosedTaxYearsForBusiness, getLatestClosedTaxYear } from "@/lib/data/taxYears";
 import { getRequestLocale } from "@/lib/i18n/locale";
 
@@ -17,20 +17,21 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       ? {
           title: "Finansiella rapporter",
           subtitle: "Skapa rapporter i realtid och exportera årsdata.",
-          hint: "Välj ett stängt skatteår (januari-december) för historiska böcker."
+          hint: "Välj ett stängt skatteår enligt din valda period i inställningarna."
         }
       : {
           title: "Financial Reports",
           subtitle: "Generate real-time reports and export annual data.",
-          hint: "Select a closed tax year (January-December) for historical books."
+          hint: "Select a closed tax year based on your configured tax-year period in settings."
         };
   const business = await ensureBusiness();
-  const closedYears = await getClosedTaxYearsForBusiness(business.id);
+  const fiscalYearStartMonth = getFiscalYearStartMonth(business.fiscalYearStart);
+  const closedYears = await getClosedTaxYearsForBusiness(business.id, fiscalYearStartMonth);
   const requestedYear = parseTaxYear(searchParams?.year);
   const selectedYear =
     requestedYear && closedYears.includes(requestedYear)
       ? requestedYear
-      : (closedYears[0] ?? getLatestClosedTaxYear());
+      : (closedYears[0] ?? getLatestClosedTaxYear(fiscalYearStartMonth));
 
   return (
     <section className="page">
@@ -39,7 +40,12 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <p className="note">{copy.hint}</p>
 
       <article className="card" id="report-runner">
-        <ReportsRunner locale={locale} closedYears={closedYears} initialYear={selectedYear} />
+        <ReportsRunner
+          locale={locale}
+          closedYears={closedYears}
+          fiscalYearStartMonth={fiscalYearStartMonth}
+          initialYear={selectedYear}
+        />
       </article>
     </section>
   );

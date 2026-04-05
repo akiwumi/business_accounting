@@ -78,8 +78,19 @@ export const buildAccountingWorkbook = (data: {
   ];
 
   const neRows = [
-    ["NE Line", "Amount"],
-    ...Object.entries(data.neDraft.lineItems).map(([key, value]) => [key, value]),
+    ["Section", "NE Line", "Amount"],
+    ...Object.entries(data.neDraft.incomeLines).map(([key, value]) => ["Income", key, value]),
+    ...Object.entries(data.neDraft.expenseLines).map(([key, value]) => ["Expense", key, value]),
+    ["Totals", "totalIncome", data.neDraft.totalIncome],
+    ["Totals", "totalExpenses", data.neDraft.totalExpenses],
+    ["Result", "R47_overskottUnderskott", data.neDraft.R47_overskottUnderskott],
+    ["Result", "R48_skattemassigResultat", data.neDraft.R48_skattemassigResultat],
+    ["Adjustment", "perisFond_withdrawal", data.neDraft.taxAdjustments.perisFond_withdrawal],
+    ["Adjustment", "perisFond_allocation", data.neDraft.taxAdjustments.perisFond_allocation],
+    ["Adjustment", "expFond_withdrawal", data.neDraft.taxAdjustments.expFond_withdrawal],
+    ["Adjustment", "expFond_allocation", data.neDraft.taxAdjustments.expFond_allocation],
+    ["Supplementary", "fixedAssetCount", data.neDraft.supplementary.fixedAssetCount],
+    ["Supplementary", "mileageDeduction", data.neDraft.supplementary.mileageDeduction],
     [],
     ["Notes", ""],
     ...data.neDraft.notes.map((note) => [note, ""])

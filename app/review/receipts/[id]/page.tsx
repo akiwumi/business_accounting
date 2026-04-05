@@ -22,22 +22,6 @@ export default async function ReceiptReviewPage({ params }: ReceiptReviewPagePro
           title: "Kvitto granskning",
           back: "Till granskning",
           details: "Kvittoinformation",
-          receiptNumber: "Kvittonummer",
-          vendor: "Leverantör",
-          source: "Källa",
-          file: "Fil",
-          mime: "Mime-typ",
-          created: "Skapad",
-          receiptDate: "Utfärdandedatum",
-          amount: "Brutto",
-          netAmount: "Netto",
-          vatAmount: "Moms",
-          vatRate: "Momssats",
-          category: "Kategori",
-          confidence: "Konfidens",
-          status: "Status",
-          needsReview: "Kräver granskning",
-          reviewed: "Granskad",
           linkedTransactions: "Kopplade transaktioner",
           edit: "Redigera",
           date: "Datum",
@@ -53,22 +37,6 @@ export default async function ReceiptReviewPage({ params }: ReceiptReviewPagePro
           title: "Receipt Review",
           back: "Back to review",
           details: "Receipt Details",
-          receiptNumber: "Receipt Number",
-          vendor: "Vendor",
-          source: "Source",
-          file: "File",
-          mime: "MIME type",
-          created: "Created",
-          receiptDate: "Issue date",
-          amount: "Gross amount",
-          netAmount: "Net amount",
-          vatAmount: "VAT amount",
-          vatRate: "VAT rate",
-          category: "Category",
-          confidence: "Confidence",
-          status: "Status",
-          needsReview: "Needs review",
-          reviewed: "Reviewed",
           linkedTransactions: "Linked Transactions",
           edit: "Edit",
           date: "Date",
@@ -112,70 +80,29 @@ export default async function ReceiptReviewPage({ params }: ReceiptReviewPagePro
 
       <article className="card stack">
         <h2>{copy.details}</h2>
-        <p className="note">
-          {copy.receiptNumber}: {receipt.receiptNumber ?? "-"}
-        </p>
-        <p className="note">
-          {copy.vendor}: {receipt.vendor ?? "-"}
-        </p>
-        <p className="note">
-          {copy.source}: {receipt.source}
-        </p>
-        <p className="note">
-          {copy.file}: {receipt.originalFileName}
-        </p>
-        <p className="note">
-          {copy.mime}: {receipt.mimeType}
-        </p>
-        <p className="note">
-          {copy.created}: {receipt.createdAt.toISOString().slice(0, 10)}
-        </p>
-        <p className="note">
-          {copy.receiptDate}: {receipt.receiptDate ? receipt.receiptDate.toISOString().slice(0, 10) : "-"}
-        </p>
-        <p className="note">
-          {copy.amount}:{" "}
-          {receipt.grossAmount ? formatMoney(asNumber(receipt.grossAmount), receipt.currency, numberLocale) : "-"}
-        </p>
-        <p className="note">
-          {copy.netAmount}:{" "}
-          {receipt.netAmount ? formatMoney(asNumber(receipt.netAmount), receipt.currency, numberLocale) : "-"}
-        </p>
-        <p className="note">
-          {copy.vatAmount}:{" "}
-          {receipt.vatAmount ? formatMoney(asNumber(receipt.vatAmount), receipt.currency, numberLocale) : "-"}
-        </p>
-        <p className="note">
-          {copy.vatRate}: {receipt.vatRate ? `${(asNumber(receipt.vatRate) * 100).toFixed(2)}%` : "-"}
-        </p>
-        <p className="note">
-          {copy.category}: {receipt.category ?? "-"}
-        </p>
-        <p className="note">
-          {copy.confidence}: {receipt.confidence ? asNumber(receipt.confidence).toFixed(2) : "-"}
-        </p>
-        <p className="note">
-          {copy.status}: {receipt.needsReview ? copy.needsReview : copy.reviewed}
-        </p>
-        <ReceiptReviewActions receiptId={receipt.id} needsReview={receipt.needsReview} locale={locale} />
-      </article>
-
-      <article className="card">
-        <h2>{copy.edit}</h2>
         <ReceiptEditForm
           receiptId={receipt.id}
           locale={locale}
           initial={{
+            source: receipt.source ?? "upload",
+            originalFileName: receipt.originalFileName,
+            mimeType: receipt.mimeType,
+            createdDate: receipt.createdAt.toISOString().slice(0, 10),
+            confidence: receipt.confidence ? String(asNumber(receipt.confidence)) : "",
+            needsReview: receipt.needsReview,
             receiptNumber: receipt.receiptNumber ?? "",
             vendor: receipt.vendor ?? "",
+            itemPurchased: receipt.itemPurchased ?? "",
             receiptDate: receipt.receiptDate ? receipt.receiptDate.toISOString().slice(0, 10) : "",
             category: receipt.category ?? "",
             vatRate: receipt.vatRate ? String(asNumber(receipt.vatRate)) : "0.25",
             vatAmount: receipt.vatAmount ? String(asNumber(receipt.vatAmount)) : "",
             grossAmount: receipt.grossAmount ? String(asNumber(receipt.grossAmount)) : "",
+            netAmount: receipt.netAmount ? String(asNumber(receipt.netAmount)) : "",
             currency: receipt.currency ?? "SEK"
           }}
         />
+        <ReceiptReviewActions receiptId={receipt.id} needsReview={receipt.needsReview} locale={locale} />
       </article>
 
       <article className="card">

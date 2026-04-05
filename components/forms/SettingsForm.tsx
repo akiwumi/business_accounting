@@ -11,6 +11,14 @@ type SettingsFormProps = {
     jurisdiction: Jurisdiction;
     locale: string;
     baseCurrency: string;
+    bookkeepingMethod: string;
+    vatRegistered: boolean;
+    vatFrequency: string;
+    fiscalYearStartMonth: number;
+    sniCode: string;
+    vatNumber: string;
+    fSkattRegistered: boolean;
+    personnummer: string;
     invoiceNumberPattern: string;
     invoiceSenderName: string;
     invoiceSenderAddress: string;
@@ -50,12 +58,33 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           english: "Engelska",
           swedish: "Svenska",
           currency: "Valuta",
+          bookkeepingMethod: "Bokföringsmetod",
+          kontantmetoden: "Kontantmetoden (kontantbas)",
+          fakturametoden: "Fakturametoden (periodiserad)",
+          vatRegistered: "Momsregistrerad",
+          vatFrequency: "Momsredovisningsperiod",
+          vatMonthly: "Månadsvis",
+          vatQuarterly: "Kvartalsvis",
+          vatYearly: "Årsvis",
+          fiscalYearRange: "Skatteår (12 månader)",
+          taxYearFrom: "Från månad",
+          taxYearTo: "Till månad",
+          taxYearHint: "Välj startmånad. Slutmånad beräknas automatiskt.",
+          swedishRegSection: "Svenska registreringsuppgifter",
+          sniCode: "SNI-kod (branschkod)",
+          sniCodeHint: "5-siffrig SNI 2007-kod som beskriver din verksamhet. Hämta på verksamt.se.",
+          vatNumber: "Momsregistreringsnummer",
+          vatNumberHint: "Format: SE + personnummer/orgnr + 01, t.ex. SE123456789001.",
+          fSkattRegistered: "Godkänd för F-skatt",
+          fSkattHint: "Anger att du är godkänd för F-skatt av Skatteverket. Ska anges på alla fakturor.",
+          personnummer: "Personnummer (för deklaration)",
+          personnummerHint: "Ditt personnummer används vid inkomstdeklaration. Lagras lokalt.",
           invoicing: "Fakturainställningar",
           numberingPattern: "Fakturanummermönster",
           numberingHint: "Använd {YYYY}, {YY}, {MM}, {DD} och {SEQ} eller {SEQ:4}.",
           senderName: "Avsändarnamn",
           senderAddress: "Avsändaradress",
-          senderOrgNumber: "Org.nr",
+          senderOrgNumber: "Org.nr / Personnummer",
           senderEmail: "Avsändar-e-post",
           senderPhone: "Avsändartelefon",
           senderWebsite: "Avsändarwebbplats",
@@ -65,15 +94,18 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           chooseImage: "Välj bild",
           clearImage: "Rensa",
           taxRates: "Skatteprognosnivåer",
-          taxRatesNote: "Ange decimalvärden. Exempel: 0.32 = 32%.",
+          taxRatesNote: "Ange decimalvärden. Exempel: 0.32 = 32 %.",
           municipalTax: "Kommunal skattesats",
           socialContribution: "Egenavgifter",
-          deduction: "Allmänt avdrag",
+          deduction: "Allmänt avdrag (ca 25 % av egenavgifter)",
           save: "Spara inställningar",
           saving: "Sparar...",
           saved: "Inställningarna sparades.",
+          savedLocalOnly: "Inställningarna sparades lokalt på den här datorn.",
           failed: "Kunde inte spara inställningar",
-          unknownError: "Okänt fel"
+          unknownError: "Okänt fel",
+          yes: "Ja",
+          no: "Nej"
         }
       : {
           businessName: "Business name",
@@ -85,12 +117,33 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           english: "English",
           swedish: "Swedish",
           currency: "Currency",
+          bookkeepingMethod: "Bookkeeping method",
+          kontantmetoden: "Cash basis (Kontantmetoden)",
+          fakturametoden: "Accrual basis (Fakturametoden)",
+          vatRegistered: "VAT registered",
+          vatFrequency: "VAT reporting period",
+          vatMonthly: "Monthly",
+          vatQuarterly: "Quarterly",
+          vatYearly: "Annual",
+          fiscalYearRange: "Tax Year (12 months)",
+          taxYearFrom: "From month",
+          taxYearTo: "To month",
+          taxYearHint: "Choose the start month. The end month is calculated automatically.",
+          swedishRegSection: "Swedish Registration Details",
+          sniCode: "SNI code (Industry code)",
+          sniCodeHint: "5-digit SNI 2007 code describing your business. Look up at verksamt.se.",
+          vatNumber: "VAT registration number (Momsregistreringsnummer)",
+          vatNumberHint: "Format: SE + personal/org number + 01, e.g. SE123456789001.",
+          fSkattRegistered: "Approved for F-tax (F-skatt)",
+          fSkattHint: "Indicates you are approved for F-tax by Skatteverket. Must be stated on all invoices.",
+          personnummer: "Personal identity number (for tax return)",
+          personnummerHint: "Your personnummer is used when filing Inkomstdeklaration 1. Stored locally only.",
           invoicing: "Invoice Settings",
           numberingPattern: "Invoice number pattern",
           numberingHint: "Use {YYYY}, {YY}, {MM}, {DD} and {SEQ} or {SEQ:4}.",
           senderName: "Sender name",
           senderAddress: "Sender address",
-          senderOrgNumber: "Registration no.",
+          senderOrgNumber: "Org. / Personal number",
           senderEmail: "Sender email",
           senderPhone: "Sender phone",
           senderWebsite: "Sender website",
@@ -102,19 +155,34 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           taxRates: "Tax Projection Rates",
           taxRatesNote: "Set decimal rates. Example: 0.32 = 32%.",
           municipalTax: "Municipal tax rate",
-          socialContribution: "Social contribution rate",
-          deduction: "General deduction rate",
+          socialContribution: "Social contribution rate (Egenavgifter)",
+          deduction: "General deduction (~25% of social contributions)",
           save: "Save Settings",
           saving: "Saving...",
           saved: "Settings saved.",
+          savedLocalOnly: "Settings saved locally on this machine.",
           failed: "Failed to save settings",
-          unknownError: "Unknown error"
+          unknownError: "Unknown error",
+          yes: "Yes",
+          no: "No"
         };
 
   const [name, setName] = useState(initial.name);
   const [jurisdiction, setJurisdiction] = useState<Jurisdiction>(initial.jurisdiction);
   const [locale, setLocale] = useState(initial.locale || "en");
   const [baseCurrency, setBaseCurrency] = useState(initial.baseCurrency || "SEK");
+  const [bookkeepingMethod, setBookkeepingMethod] = useState(initial.bookkeepingMethod || "kontantmetoden");
+  const [vatRegistered, setVatRegistered] = useState(initial.vatRegistered ?? true);
+  const [vatFrequency, setVatFrequency] = useState(initial.vatFrequency || "yearly");
+  const [fiscalYearStartMonth, setFiscalYearStartMonth] = useState(
+    Number.isInteger(initial.fiscalYearStartMonth) ? initial.fiscalYearStartMonth : 1
+  );
+  // Swedish registration
+  const [sniCode, setSniCode] = useState(initial.sniCode || "");
+  const [vatNumber, setVatNumber] = useState(initial.vatNumber || "");
+  const [fSkattRegistered, setFSkattRegistered] = useState(initial.fSkattRegistered ?? true);
+  const [personnummer, setPersonnummer] = useState(initial.personnummer || "");
+  // Invoice
   const [invoiceNumberPattern, setInvoiceNumberPattern] = useState(
     initial.invoiceNumberPattern || "INV-{YYYY}-{SEQ:4}"
   );
@@ -127,9 +195,8 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
   const [invoiceEmailFrom, setInvoiceEmailFrom] = useState(initial.invoiceEmailFrom || "");
   const [invoiceDefaultLogo, setInvoiceDefaultLogo] = useState(initial.invoiceDefaultLogo || "");
   const [invoiceDefaultSignature, setInvoiceDefaultSignature] = useState(initial.invoiceDefaultSignature || "");
-  const [municipalTaxRate, setMunicipalTaxRate] = useState(
-    initial.taxConfig?.municipalTaxRate ?? 0.32
-  );
+  // Tax rates
+  const [municipalTaxRate, setMunicipalTaxRate] = useState(initial.taxConfig?.municipalTaxRate ?? 0.32);
   const [socialContributionRate, setSocialContributionRate] = useState(
     initial.taxConfig?.socialContributionRate ?? 0.2897
   );
@@ -170,6 +237,14 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           jurisdiction,
           locale,
           baseCurrency,
+          bookkeepingMethod,
+          vatRegistered,
+          vatFrequency,
+          fiscalYearStartMonth,
+          sniCode,
+          vatNumber,
+          fSkattRegistered,
+          personnummer,
           invoiceNumberPattern,
           invoiceSenderName,
           invoiceSenderAddress,
@@ -185,14 +260,33 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           generalDeductionRate: Number(generalDeductionRate)
         })
       });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error ?? copy.failed);
-      await fetch("/api/locale", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locale })
-      });
-      setSuccess(copy.saved);
+
+      const raw = await response.text();
+      let json: { error?: string; savedLocally?: boolean; warning?: string } | null = null;
+      if (raw) {
+        try {
+          json = JSON.parse(raw) as { error?: string };
+        } catch {
+          json = null;
+        }
+      }
+
+      if (!response.ok) {
+        const fallback = raw && !raw.startsWith("<") ? raw : copy.failed;
+        throw new Error(json?.error ?? fallback);
+      }
+
+      try {
+        await fetch("/api/locale", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locale })
+        });
+      } catch {
+        // Locale cookie update is non-critical for settings persistence.
+      }
+
+      setSuccess(json?.savedLocally ? copy.savedLocalOnly : copy.saved);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : copy.unknownError);
     } finally {
@@ -200,8 +294,16 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
     }
   };
 
+  const monthFormatter = new Intl.DateTimeFormat(uiLocale === "sv" ? "sv-SE" : "en-GB", { month: "long" });
+  const monthOptions = Array.from({ length: 12 }, (_value, index) => ({
+    value: index + 1,
+    label: monthFormatter.format(new Date(Date.UTC(2026, index, 1)))
+  }));
+  const fiscalYearEndMonth = fiscalYearStartMonth === 1 ? 12 : fiscalYearStartMonth - 1;
+
   return (
     <form className="stack" onSubmit={save}>
+      {/* ── Business Basics ─────────────────────────────────────────── */}
       <label className="stack">
         {copy.businessName}
         <input value={name} onChange={(event) => setName(event.target.value)} />
@@ -238,6 +340,113 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
         </label>
       </div>
 
+      <div className="row">
+        <label className="stack">
+          {copy.bookkeepingMethod}
+          <select value={bookkeepingMethod} onChange={(event) => setBookkeepingMethod(event.target.value)}>
+            <option value="kontantmetoden">{copy.kontantmetoden}</option>
+            <option value="fakturametoden">{copy.fakturametoden}</option>
+          </select>
+        </label>
+
+        <label className="stack">
+          {copy.vatFrequency}
+          <select value={vatFrequency} onChange={(event) => setVatFrequency(event.target.value)}>
+            <option value="monthly">{copy.vatMonthly}</option>
+            <option value="quarterly">{copy.vatQuarterly}</option>
+            <option value="yearly">{copy.vatYearly}</option>
+          </select>
+        </label>
+
+        <label className="stack">
+          {copy.vatRegistered}
+          <select
+            value={vatRegistered ? "yes" : "no"}
+            onChange={(event) => setVatRegistered(event.target.value === "yes")}
+          >
+            <option value="yes">{copy.yes}</option>
+            <option value="no">{copy.no}</option>
+          </select>
+        </label>
+      </div>
+
+      <h3>{copy.fiscalYearRange}</h3>
+      <div className="row">
+        <label className="stack">
+          {copy.taxYearFrom}
+          <select
+            value={String(fiscalYearStartMonth)}
+            onChange={(event) => setFiscalYearStartMonth(Number(event.target.value))}
+          >
+            {monthOptions.map((month) => (
+              <option key={month.value} value={month.value}>
+                {month.label}
+              </option>
+            ))}
+          </select>
+          <span className="note">{copy.taxYearHint}</span>
+        </label>
+
+        <label className="stack">
+          {copy.taxYearTo}
+          <input value={monthOptions[fiscalYearEndMonth - 1]?.label ?? ""} readOnly />
+        </label>
+      </div>
+
+      {/* ── Swedish Registration Details ─────────────────────────────── */}
+      <h3>{copy.swedishRegSection}</h3>
+
+      <div className="row">
+        <label className="stack">
+          {copy.sniCode}
+          <input
+            value={sniCode}
+            onChange={(event) => setSniCode(event.target.value)}
+            placeholder="62010"
+            maxLength={10}
+          />
+          <span className="note">{copy.sniCodeHint}</span>
+        </label>
+
+        <label className="stack">
+          {copy.vatNumber}
+          <input
+            value={vatNumber}
+            onChange={(event) => setVatNumber(event.target.value)}
+            placeholder="SE123456789001"
+            maxLength={30}
+          />
+          <span className="note">{copy.vatNumberHint}</span>
+        </label>
+      </div>
+
+      <div className="row">
+        <label className="stack">
+          {copy.fSkattRegistered}
+          <select
+            value={fSkattRegistered ? "yes" : "no"}
+            onChange={(event) => setFSkattRegistered(event.target.value === "yes")}
+          >
+            <option value="yes">{copy.yes}</option>
+            <option value="no">{copy.no}</option>
+          </select>
+          <span className="note">{copy.fSkattHint}</span>
+        </label>
+
+        <label className="stack">
+          {copy.personnummer}
+          <input
+            value={personnummer}
+            onChange={(event) => setPersonnummer(event.target.value)}
+            placeholder="YYYYMMDD-XXXX"
+            maxLength={20}
+            autoComplete="off"
+          />
+          <span className="note">{copy.personnummerHint}</span>
+        </label>
+      </div>
+
+      {/* ── Invoice Settings ─────────────────────────────────────────── */}
       <h3>{copy.invoicing}</h3>
 
       <label className="stack">
@@ -300,11 +509,7 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           {invoiceDefaultLogo ? (
             <div className="row">
               <img src={invoiceDefaultLogo} alt="Invoice logo preview" style={{ maxHeight: 42 }} />
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setInvoiceDefaultLogo("")}
-              >
+              <button type="button" className="secondary" onClick={() => setInvoiceDefaultLogo("")}>
                 {copy.clearImage}
               </button>
             </div>
@@ -323,11 +528,7 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
           {invoiceDefaultSignature ? (
             <div className="row">
               <img src={invoiceDefaultSignature} alt="Invoice signature preview" style={{ maxHeight: 42 }} />
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => setInvoiceDefaultSignature("")}
-              >
+              <button type="button" className="secondary" onClick={() => setInvoiceDefaultSignature("")}>
                 {copy.clearImage}
               </button>
             </div>
@@ -337,6 +538,7 @@ export const SettingsForm = ({ initial, locale: uiLocale }: SettingsFormProps) =
         </label>
       </div>
 
+      {/* ── Tax Projection Rates ─────────────────────────────────────── */}
       <h3>{copy.taxRates}</h3>
       <p className="note">{copy.taxRatesNote}</p>
 

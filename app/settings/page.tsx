@@ -2,6 +2,8 @@ import { SettingsForm } from "@/components/forms/SettingsForm";
 import { SectionExportBar } from "@/components/layout/SectionExportBar";
 import { asNumber } from "@/lib/accounting/math";
 import { ensureBusiness } from "@/lib/data/business";
+import { mergeBusinessWithLocalSettings, readLocalSettings } from "@/lib/data/localSettings";
+import { getFiscalYearStartMonth } from "@/lib/data/period";
 import { prisma } from "@/lib/db";
 import { type Jurisdiction } from "@/lib/domain/enums";
 import { getRequestLocale } from "@/lib/i18n/locale";
@@ -12,11 +14,11 @@ export default async function SettingsPage() {
     locale === "sv"
       ? {
           title: "Inställningar",
-          subtitle: "Konfigurera standardvärden för skatteprognos och landslogik."
+          subtitle: "Konfigurera registreringsuppgifter, bokföringsmetod, moms och skatteprognosnivåer."
         }
       : {
           title: "Settings",
-          subtitle: "Configure tax projection defaults and jurisdiction behavior."
+          subtitle: "Configure registration details, bookkeeping method, VAT settings and tax projection rates."
         };
 
   const business = await ensureBusiness();
@@ -24,8 +26,9 @@ export default async function SettingsPage() {
     where: { id: business.id },
     include: { taxConfig: true }
   });
-
   if (!fresh) return null;
+  const localSettings = await readLocalSettings();
+  const effective = mergeBusinessWithLocalSettings(fresh, localSettings);
 
   return (
     <section className="page">
@@ -38,28 +41,36 @@ export default async function SettingsPage() {
           <SettingsForm
             locale={locale}
             initial={{
-              name: fresh.name,
-              jurisdiction: fresh.jurisdiction as Jurisdiction,
-              locale: fresh.locale,
-              baseCurrency: fresh.baseCurrency,
-              invoiceNumberPattern: fresh.invoiceNumberPattern,
-              invoiceSenderName: fresh.invoiceSenderName ?? "",
-              invoiceSenderAddress: fresh.invoiceSenderAddress ?? "",
-              invoiceSenderOrgNumber: fresh.invoiceSenderOrgNumber ?? "",
-              invoiceSenderEmail: fresh.invoiceSenderEmail ?? "",
-              invoiceSenderPhone: fresh.invoiceSenderPhone ?? "",
-              invoiceSenderWebsite: fresh.invoiceSenderWebsite ?? "",
-              invoiceEmailFrom: fresh.invoiceEmailFrom ?? "",
-              invoiceDefaultLogo: fresh.invoiceDefaultLogo ?? "",
-              invoiceDefaultSignature: fresh.invoiceDefaultSignature ?? "",
-              taxConfig: fresh.taxConfig
+              name: effective.name,
+              jurisdiction: effective.jurisdiction as Jurisdiction,
+              locale: effective.locale,
+              baseCurrency: effective.baseCurrency,
+              bookkeepingMethod: effective.bookkeepingMethod,
+              vatRegistered: effective.vatRegistered,
+              vatFrequency: effective.vatFrequency,
+              fiscalYearStartMonth: getFiscalYearStartMonth(effective.fiscalYearStart),
+              sniCode: (effective as { sniCode?: string | null }).sniCode ?? "",
+              vatNumber: (effective as { vatNumber?: string | null }).vatNumber ?? "",
+              fSkattRegistered: (effective as { fSkattRegistered?: boolean }).fSkattRegistered ?? true,
+              personnummer: (effective as { personnummer?: string | null }).personnummer ?? "",
+              invoiceNumberPattern: effective.invoiceNumberPattern,
+              invoiceSenderName: effective.invoiceSenderName ?? "",
+              invoiceSenderAddress: effective.invoiceSenderAddress ?? "",
+              invoiceSenderOrgNumber: effective.invoiceSenderOrgNumber ?? "",
+              invoiceSenderEmail: effective.invoiceSenderEmail ?? "",
+              invoiceSenderPhone: effective.invoiceSenderPhone ?? "",
+              invoiceSenderWebsite: effective.invoiceSenderWebsite ?? "",
+              invoiceEmailFrom: effective.invoiceEmailFrom ?? "",
+              invoiceDefaultLogo: effective.invoiceDefaultLogo ?? "",
+              invoiceDefaultSignature: effective.invoiceDefaultSignature ?? "",
+              taxConfig: effective.taxConfig
                 ? {
-                    municipalTaxRate: asNumber(fresh.taxConfig.municipalTaxRate as unknown as number | string),
+                    municipalTaxRate: asNumber(effective.taxConfig.municipalTaxRate as unknown as number | string),
                     socialContributionRate: asNumber(
-                      fresh.taxConfig.socialContributionRate as unknown as number | string
+                      effective.taxConfig.socialContributionRate as unknown as number | string
                     ),
                     generalDeductionRate: asNumber(
-                      fresh.taxConfig.generalDeductionRate as unknown as number | string
+                      effective.taxConfig.generalDeductionRate as unknown as number | string
                     )
                   }
                 : null

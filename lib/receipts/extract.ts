@@ -1,11 +1,11 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { promisify } from "node:util";
 
-import { createWorker } from "tesseract.js";
 import { z } from "zod";
+import { inferReceiptMimeType, isReceiptImageMimeType } from "@/lib/receipts/mime";
 
 const execFile = promisify(execFileCallback);
 
@@ -96,7 +96,7 @@ const parseAmountString = (raw: string): number | null => {
   return round2(parsed);
 };
 
-const amountRegex = /-?\d[\d .]*[,.]\d{2}/g;
+const amountRegex = /-?\d[\d .]*[,.]\d{1,2}/g;
 
 const extractAmountTokens = (text: string): AmountToken[] => {
   const tokens: AmountToken[] = [];
@@ -165,6 +165,39 @@ const pickAmountNearKeyword = (
 };
 
 const pickCurrency = (text: string): string => {
+  const supported = new Set([
+    "SEK",
+    "EUR",
+    "GBP",
+    "USD",
+    "CHF",
+    "DKK",
+    "NOK",
+    "ISK",
+    "CAD",
+    "AUD",
+    "NZD",
+    "JPY",
+    "CNY",
+    "PLN",
+    "CZK",
+    "HUF",
+    "SGD",
+    "HKD",
+    "RON",
+    "BGN",
+    "HRK",
+    "TRY",
+    "BRL",
+    "MXN",
+    "INR",
+    "THB",
+    "AED",
+    "SAR",
+    "QAR",
+    "ZAR"
+  ]);
+
   const lower = text.toLowerCase();
   if (/€|\beur\b/.test(lower)) return "EUR";
   if (/£|\bgbp\b/.test(lower)) return "GBP";
@@ -186,9 +219,11 @@ const pickCurrency = (text: string): string => {
 
   const isoMatch = lower.match(/\b([a-z]{3})\b/g);
   if (isoMatch) {
-    const denyList = new Set(["vat", "moms", "tot", "sum", "org", "www", "com"]);
+    const denyList = new Set(["vat", "moms", "tot", "sum", "org", "www", "com", "lgh"]);
     for (const token of isoMatch) {
-      if (!denyList.has(token)) return token.toUpperCase();
+      if (denyList.has(token)) continue;
+      const upper = token.toUpperCase();
+      if (supported.has(upper)) return upper;
     }
   }
 
@@ -275,9 +310,16 @@ const extractIssueDate = (text: string): string | undefined => {
     .map((line) => normalizeSpace(line))
     .filter(Boolean);
 
-  const dateKeywordRegex =
-    /(fakturadatum|invoice date|issue date|receipt date|datum|date|created|utställd|utfärdad|time|tid)[^\n]{0,72}/gi;
-  for (const match of text.matchAll(dateKeywordRegex)) {
+  const strictDateKeywordRegex =
+    /(fakturadatum|invoice date|issue date|receipt date|issued|utfärdad|utställd)[^\n]{0,72}/gi;
+  for (const match of text.matchAll(strictDateKeywordRegex)) {
+    const iso = toIsoDate(match[0]);
+    if (iso) return iso;
+  }
+
+  const broadDateKeywordRegex = /(datum|date|created|time|tid)[^\n]{0,72}/gi;
+  for (const match of text.matchAll(broadDateKeywordRegex)) {
+    if (/orderdatum|order date|delivery date|leveransdatum/i.test(match[0])) continue;
     const iso = toIsoDate(match[0]);
     if (iso) return iso;
   }
@@ -319,6 +361,8 @@ const isAddressLike = (value: string) =>
 const vendorNoise = /^(customer invoice copy|kontantfaktura|cashier|customer|company cvr|company name|name|address|zip|city|phone|time|pick up time|shopno|reglid|regno|order-id|sequenceid|din faktura|faktura|invoice|månadsavi|belopp|förfallodag|plusgiro|bankgiro|mottagare|ocr|kontonr|sida|kontaktperson|fakturaspecifikation|benämning|antal|à-pris|moms|totalt belopp|frågor|händelser|ingående saldo|betalning|utgående saldo|lägsta belopp att betala|vilkommen|signature)/i;
 
 const cleanVendor = (value: string) => normalizeSpace(value.replace(/^[#>:_-]+|[#>:_-]+$/g, ""));
+const stripPhoneFromVendor = (value: string) =>
+  normalizeSpace(value.replace(/\b\+?\d[\d\s-]{6,}\b/g, "").replace(/[|]+/g, " "));
 
 const isGoodVendorCandidate = (value: string) => {
   const candidate = cleanVendor(value);
@@ -341,7 +385,7 @@ const extractVendor = (text: string, fileName: string): string | undefined => {
 
   const candidates: Array<{ value: string; score: number; index: number }> = [];
   const pushCandidate = (value: string, score: number, index: number) => {
-    const cleaned = cleanVendor(value);
+    const cleaned = stripPhoneFromVendor(cleanVendor(value));
     if (!isGoodVendorCandidate(cleaned)) return;
     candidates.push({ value: cleaned, score, index });
   };
@@ -383,6 +427,14 @@ const extractVendor = (text: string, fileName: string): string | undefined => {
   const ranked = candidates.sort((a, b) => b.score - a.score || a.index - b.index);
   const best = ranked[0];
   if (best) {
+    const genericVendorNames = new Set(["photo", "receipt", "invoice", "kvitto", "faktura", "store", "shop"]);
+    const nonGeneric = ranked.find(
+      (candidate) => !genericVendorNames.has(candidate.value.toLowerCase())
+    );
+    if (genericVendorNames.has(best.value.toLowerCase()) && nonGeneric && nonGeneric.score >= best.score - 4) {
+      return toTitle(nonGeneric.value);
+    }
+
     const nonBank = ranked.find((candidate) => !/\bbank\b/i.test(candidate.value));
     if (/\bbank\b/i.test(best.value) && nonBank && nonBank.score >= best.score - 1) {
       return toTitle(nonBank.value);
@@ -402,29 +454,44 @@ const extractReceiptNumber = (text: string): string | undefined => {
     .split("\n")
     .map((line) => normalizeSpace(line))
     .filter(Boolean);
-  const blockedContext = /(organisationsnummer|org(?:anisations)?\s*nr|momsregistreringsnummer|vat)/i;
+  const blockedContext =
+    /(organisationsnummer|org(?:anisations)?\.?\s*nr|momsregistrerings(?:nummer|nr)|moms\s*nr|vat)/i;
   const normalizeRef = (value: string) =>
     value.replace(/[^\dA-Za-z-]/g, "").replace(/^-+|-+$/g, "");
   const isValidRef = (value: string) =>
     value.length >= 5 &&
-    value.length <= 36 &&
+    value.length <= 24 &&
     /\d/.test(value) &&
-    !/^SE\d{8,}$/i.test(value);
+    !/^SE\d{10,}$/i.test(value) &&
+    !/^SE[A-Z0-9]{20,}$/i.test(value) &&
+    !/^46\d{8,11}$/.test(value) &&
+    !/^0\d{8,11}$/.test(value);
 
   const keywordPattern =
-    /(?:fakturanummer|invoice\s*(?:number|no\.?)|kvittonummer|receipt\s*(?:number|no\.?)|transaktionsreferens|transaction\s*reference|order[- ]?id|ocr(?:-?referens)?|referens)\s*[:#]?\s*([A-Z0-9][A-Z0-9\- ]{4,})/i;
+    /(?:fakturanummer|faktura\s*nr|fakturanr|invoice\s*(?:number|no\.?|nr)|kvittonummer|receipt\s*(?:number|no\.?|nr)|transaktionsreferens|transaction\s*reference|order[- ]?id|ocr(?:-?referens)?|referens)\s*[:#]?\s*([A-Z0-9][A-Z0-9\- ]{4,})/i;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (blockedContext.test(line)) continue;
 
     const keywordMatch = line.match(keywordPattern);
-    const inlineValue = keywordMatch?.[1] ? normalizeRef(keywordMatch[1]) : "";
+    const inlineRaw = keywordMatch?.[1] ?? "";
+    const inlineTokenMatches = [...inlineRaw.matchAll(/\b[A-Z0-9][A-Z0-9-]{4,24}\b/g)];
+    for (const tokenMatch of inlineTokenMatches) {
+      const token = normalizeRef(tokenMatch[0] ?? "");
+      if (token && isValidRef(token)) return token;
+    }
+    const inlineValue = inlineRaw ? normalizeRef(inlineRaw) : "";
     if (inlineValue && isValidRef(inlineValue)) return inlineValue;
 
-    if (/(fakturanummer|receipt|kvitto|ocr|referens|transaction|order)/i.test(line)) {
+    if (/(fakturanummer|faktura\s*nr|fakturanr|receipt|kvitto|ocr|referens|transaction|order)/i.test(line)) {
       const next = lines[index + 1];
       if (next && !blockedContext.test(next)) {
+        const tokenMatches = [...next.matchAll(/\b[A-Z0-9][A-Z0-9-]{4,24}\b/gi)];
+        for (const tokenMatch of tokenMatches) {
+          const token = normalizeRef(tokenMatch[0] ?? "");
+          if (token && isValidRef(token)) return token;
+        }
         const rawRef = next.match(/\b[A-Z0-9][A-Z0-9\- ]{4,}\b/i)?.[0] ?? "";
         const nextValue = normalizeRef(rawRef);
         if (nextValue && isValidRef(nextValue)) return nextValue;
@@ -440,6 +507,7 @@ const extractReceiptNumber = (text: string): string | undefined => {
 
   for (const line of lines) {
     if (blockedContext.test(line)) continue;
+    if (/(telefon|phone|mobil|contact|kontakt|tel)/i.test(line)) continue;
     const value = line.match(/\b\d{10,20}\b/)?.[0];
     if (value && isValidRef(value)) return value;
   }
@@ -667,13 +735,68 @@ const extractPdfText = async (pdfPath: string) => {
   return normalizeSpace(stdout);
 };
 
-const ocrImage = async (imageInput: Buffer | string) => {
-  const worker = await createWorker("eng");
+const scoreOcrText = (text: string) => {
+  const compact = text.replace(/\s+/g, "");
+  const letters = (compact.match(/[A-Za-zÅÄÖåäö]/g) || []).length;
+  const digits = (compact.match(/\d/g) || []).length;
+  return letters + digits * 2;
+};
+
+const ocrScriptPath = join(process.cwd(), "scripts", "ocr-image.mjs");
+
+const ocrImage = async (imagePath: string) => {
+  const stdout = await runCmd([
+    { cmd: process.execPath, args: [ocrScriptPath, imagePath] }
+  ]);
+  return normalizeSpace(stdout);
+};
+
+const preprocessImagePaths = async (params: { fileName: string; mimeType: string; buffer: Buffer }) => {
+  const tempDir = await mkdtemp(join(tmpdir(), "receipt-img-ocr-"));
+  const extension = extname(params.fileName) || (params.mimeType.includes("png") ? ".png" : ".jpg");
+  const originalPath = join(tempDir, `source${extension}`);
+  const pngPath = join(tempDir, "normalized.png");
+  const boostedPath = join(tempDir, "boosted.png");
+  const paths = [originalPath];
+
+  await writeFile(originalPath, params.buffer);
+
   try {
-    const result = await worker.recognize(imageInput as any);
-    return normalizeSpace(String(result.data.text || ""));
+    await runCmd([
+      { cmd: "sips", args: ["-s", "format", "png", originalPath, "--out", pngPath] },
+      { cmd: "/usr/bin/sips", args: ["-s", "format", "png", originalPath, "--out", pngPath] }
+    ]);
+    paths.push(pngPath);
+
+    await runCmd([
+      { cmd: "sips", args: ["-Z", "2600", pngPath, "--out", boostedPath] },
+      { cmd: "/usr/bin/sips", args: ["-Z", "2600", pngPath, "--out", boostedPath] }
+    ]);
+    paths.push(boostedPath);
+  } catch {
+    // Preprocessing is best-effort; OCR still runs on original image.
+  }
+
+  return { tempDir, paths };
+};
+
+const extractImageTextWithFallbacks = async (params: { fileName: string; mimeType: string; buffer: Buffer }) => {
+  const { tempDir, paths } = await preprocessImagePaths(params);
+  try {
+    const texts: string[] = [];
+    for (const path of paths) {
+      try {
+        const text = await ocrImage(path);
+        if (text) texts.push(text);
+      } catch {
+        // ignore and continue
+      }
+    }
+
+    if (texts.length === 0) return "";
+    return texts.sort((a, b) => scoreOcrText(b) - scoreOcrText(a))[0];
   } finally {
-    await worker.terminate();
+    await rm(tempDir, { recursive: true, force: true });
   }
 };
 
@@ -694,7 +817,12 @@ const extractPdfTextWithImageFallback = async (params: {
       { cmd: "/opt/homebrew/bin/pdftoppm", args: ["-f", "1", "-singlefile", "-png", pdfPath, imageBasePath] }
     ]);
     const pngPath = `${imageBasePath}.png`;
-    const ocrText = await ocrImage(pngPath);
+    const pngBuffer = await readFile(pngPath);
+    const ocrText = await extractImageTextWithFallbacks({
+      fileName: `${basename(params.fileName, extname(params.fileName))}.png`,
+      mimeType: "image/png",
+      buffer: pngBuffer
+    });
     return ocrText;
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -706,8 +834,9 @@ const callVisionExtractor = async (params: {
   mimeType: string;
   buffer: Buffer;
 }): Promise<ExtractedReceipt | null> => {
+  const effectiveMimeType = inferReceiptMimeType(params.fileName, params.mimeType);
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey || !params.mimeType.startsWith("image/")) return null;
+  if (!apiKey || !isReceiptImageMimeType(effectiveMimeType)) return null;
 
   const prompt = `
 Extract accounting fields from this receipt image for a Swedish sole trader.
@@ -735,7 +864,7 @@ Rules:
 - needsReview=true if any core field is uncertain.
 `.trim();
 
-  const imageData = `data:${params.mimeType};base64,${params.buffer.toString("base64")}`;
+  const imageData = `data:${effectiveMimeType};base64,${params.buffer.toString("base64")}`;
   const model = process.env.OPENAI_RECEIPT_MODEL ?? "gpt-4.1-mini";
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -778,12 +907,13 @@ const extractLocalText = async (params: {
   mimeType: string;
   buffer: Buffer;
 }) => {
+  const effectiveMimeType = inferReceiptMimeType(params.fileName, params.mimeType);
   try {
-    if (params.mimeType === "application/pdf" || params.fileName.toLowerCase().endsWith(".pdf")) {
+    if (effectiveMimeType === "application/pdf" || params.fileName.toLowerCase().endsWith(".pdf")) {
       return await extractPdfTextWithImageFallback(params);
     }
-    if (params.mimeType.startsWith("image/")) {
-      return await ocrImage(params.buffer);
+    if (isReceiptImageMimeType(effectiveMimeType)) {
+      return await extractImageTextWithFallbacks(params);
     }
   } catch {
     return "";

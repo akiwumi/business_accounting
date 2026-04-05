@@ -1,7 +1,7 @@
 import { buildDashboardSummary } from "@/lib/accounting/reports";
 import { SectionExportBar } from "@/components/layout/SectionExportBar";
-import { calendarYearPeriod, parseTaxYear } from "@/lib/data/period";
-import { getClosedTaxYearsForBusiness } from "@/lib/data/taxYears";
+import { fiscalYearPeriod, formatTaxYearLabel, getFiscalYearStartMonth, parseTaxYear } from "@/lib/data/period";
+import { getClosedTaxYearsForBusiness, getLatestClosedTaxYear } from "@/lib/data/taxYears";
 import { ensureBusiness } from "@/lib/data/business";
 import { formatMoney } from "@/lib/data/format";
 import { prisma } from "@/lib/db";
@@ -21,7 +21,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           title: "Bokföringsöversikt",
           annual: "Årsbokslut (historik)",
           taxYear: "Skatteår",
-          customNote: "Stängda skatteår följer kalenderår: januari till december.",
+          customNote: "Stängda skatteår följer din valda skatteårsperiod i inställningarna.",
           loadYear: "Ladda år",
           revenue: "Intäkter",
           expenses: "Kostnader",
@@ -41,7 +41,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           title: "Accounting Dashboard",
           annual: "Annual Books (Historical)",
           taxYear: "Tax Year",
-          customNote: "Closed tax years follow the calendar year: January through December.",
+          customNote: "Closed tax years follow your configured tax-year range in settings.",
           loadYear: "Load Year",
           revenue: "Revenue",
           expenses: "Expenses",
@@ -60,13 +60,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const numberLocale = locale === "sv" ? "sv-SE" : "en-GB";
 
   const business = await ensureBusiness();
-  const closedTaxYears = await getClosedTaxYearsForBusiness(business.id);
+  const fiscalYearStartMonth = getFiscalYearStartMonth(business.fiscalYearStart);
+  const closedTaxYears = await getClosedTaxYearsForBusiness(business.id, fiscalYearStartMonth);
   const requestedYear = parseTaxYear(searchParams?.year);
   const selectedYear =
     requestedYear && closedTaxYears.includes(requestedYear)
       ? requestedYear
-      : (closedTaxYears[0] ?? new Date().getUTCFullYear() - 1);
-  const period = calendarYearPeriod(selectedYear);
+      : (closedTaxYears[0] ?? getLatestClosedTaxYear(fiscalYearStartMonth));
+  const period = fiscalYearPeriod(selectedYear, fiscalYearStartMonth);
+  const taxYearLabel = formatTaxYearLabel(selectedYear, fiscalYearStartMonth);
   const [summary, transactionCount, receiptCount] = await Promise.all([
     buildDashboardSummary({ businessId: business.id, ...period }),
     prisma.transaction.count({
@@ -105,7 +107,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <h1 className="title">{copy.title}</h1>
       <p className="subtitle">
         {business.name} · {business.jurisdiction} · {business.bookkeepingMethod} · VAT {business.vatFrequency} ·{" "}
-        {copy.taxYear} {selectedYear}
+        {copy.taxYear} {taxYearLabel}
       </p>
       <SectionExportBar locale={locale} section="dashboard" params={{ year: String(selectedYear) }} />
 
@@ -117,7 +119,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <select name="year" defaultValue={String(selectedYear)}>
               {closedTaxYears.map((year) => (
                 <option key={year} value={year}>
-                  {year}
+                  {formatTaxYearLabel(year, fiscalYearStartMonth)}
                 </option>
               ))}
             </select>
@@ -132,19 +134,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <div className="grid" id="summary-kpis">
         <article className="card">
           <p className="label">
-            {copy.revenue} ({selectedYear})
+            {copy.revenue} ({taxYearLabel})
           </p>
           <p className="kpi">{formatMoney(summary.revenue, "SEK", numberLocale)}</p>
         </article>
         <article className="card">
           <p className="label">
-            {copy.expenses} ({selectedYear})
+            {copy.expenses} ({taxYearLabel})
           </p>
           <p className="kpi">{formatMoney(summary.expenses, "SEK", numberLocale)}</p>
         </article>
         <article className="card">
           <p className="label">
-            {copy.operatingProfit} ({selectedYear})
+            {copy.operatingProfit} ({taxYearLabel})
           </p>
           <p className="kpi">{formatMoney(summary.operatingProfit, "SEK", numberLocale)}</p>
         </article>

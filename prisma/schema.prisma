@@ -18,6 +18,11 @@ model Business {
   fiscalYearStart   DateTime
   baseCurrency      String       @default("SEK")
   locale            String       @default("en")
+  // Swedish registration fields
+  sniCode           String?
+  vatNumber         String?
+  fSkattRegistered  Boolean      @default(true)
+  personnummer      String?
   invoiceNumberPattern   String   @default("INV-{YYYY}-{SEQ:4}")
   nextInvoiceSequence    Int      @default(1)
   invoiceSenderName      String?
@@ -32,13 +37,16 @@ model Business {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  taxConfig   TaxConfig?
-  accounts    Account[]
-  receipts    Receipt[]
-  invoices    Invoice[]
-  customers   Customer[]
-  transactions Transaction[]
-  bankImports BankImportBatch[]
+  taxConfig            TaxConfig?
+  accounts             Account[]
+  receipts             Receipt[]
+  invoices             Invoice[]
+  customers            Customer[]
+  transactions         Transaction[]
+  bankImports          BankImportBatch[]
+  fixedAssets          FixedAsset[]
+  mileageEntries       MileageEntry[]
+  periodisationEntries PeriodisationEntry[]
 }
 
 model TaxConfig {
@@ -81,6 +89,7 @@ model Receipt {
   filePath         String
   receiptNumber    String?
   vendor           String?
+  itemPurchased    String?
   receiptDate      DateTime?
   grossAmount      Decimal?
   netAmount        Decimal?
@@ -240,6 +249,58 @@ model BankImportBatch {
 
   business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   rows     BankImportRow[]
+}
+
+model FixedAsset {
+  id                 String    @id @default(cuid())
+  businessId         String
+  description        String
+  category           String    @default("equipment")
+  acquisitionDate    DateTime
+  acquisitionCost    Decimal
+  depreciationMethod String    @default("declining_30")
+  disposalDate       DateTime?
+  disposalValue      Decimal?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+}
+
+model MileageEntry {
+  id              String   @id @default(cuid())
+  businessId      String
+  tripDate        DateTime
+  destination     String
+  purpose         String
+  kilometers      Decimal
+  ratePerKm       Decimal  @default(1.85)
+  deductionAmount Decimal
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, tripDate])
+}
+
+model PeriodisationEntry {
+  id         String   @id @default(cuid())
+  businessId String
+  entryType  String
+  direction  String
+  taxYear    Int
+  amount     Decimal
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, taxYear])
 }
 
 model BankImportRow {

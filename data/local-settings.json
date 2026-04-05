@@ -1,0 +1,30 @@
+{
+  "updatedAt": "2026-04-05T10:07:07.405Z",
+  "settings": {
+    "name": "Eugene Akiwumi",
+    "jurisdiction": "SWEDEN",
+    "locale": "en",
+    "baseCurrency": "SEK",
+    "bookkeepingMethod": "kontantmetoden",
+    "vatRegistered": true,
+    "vatFrequency": "yearly",
+    "fiscalYearStartMonth": 4,
+    "sniCode": "",
+    "vatNumber": "SE196903072038",
+    "fSkattRegistered": true,
+    "personnummer": "196903072038",
+    "invoiceNumberPattern": "INV-{YYYY}-{SEQ:4}",
+    "invoiceSenderName": "",
+    "invoiceSenderAddress": "",
+    "invoiceSenderOrgNumber": "",
+    "invoiceSenderEmail": "akiwumi@me.com",
+    "invoiceSenderPhone": "0703664601",
+    "invoiceSenderWebsite": "",
+    "invoiceEmailFrom": "",
+    "invoiceDefaultLogo": "",
+    "invoiceDefaultSignature": "",
+    "municipalTaxRate": 0.32,
+    "socialContributionRate": 0.2897,
+    "generalDeductionRate": 0.25
+  }
+}

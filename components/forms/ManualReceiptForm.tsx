@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { type Locale } from "@/lib/i18n/locale";
 
@@ -21,7 +23,16 @@ type ManualReceiptResponse = {
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-export const ManualReceiptForm = ({ locale }: { locale: Locale }) => {
+export const ManualReceiptForm = ({
+  locale,
+  activeYear,
+  activeMonth
+}: {
+  locale: Locale;
+  activeYear?: number;
+  activeMonth?: number | null;
+}) => {
+  const router = useRouter();
   const copy =
     locale === "sv"
       ? {
@@ -49,7 +60,10 @@ export const ManualReceiptForm = ({ locale }: { locale: Locale }) => {
           unknown: "Okänt fel",
           receiptId: "Kvitto-ID",
           receiptNumberLabel: "Kvittonummer",
-          transactionId: "Transaktions-ID"
+          transactionId: "Transaktions-ID",
+          openReview: "Öppna granskning",
+          savedOutsideFilterYear: "Kvitto sparat, men utfärdandeåret matchar inte nuvarande filter.",
+          savedOutsideFilterMonth: "Kvitto sparat, men utfärdandemånaden matchar inte nuvarande filter."
         }
       : {
           title: "Manual Receipt Entry",
@@ -76,7 +90,10 @@ export const ManualReceiptForm = ({ locale }: { locale: Locale }) => {
           unknown: "Unknown error",
           receiptId: "Receipt ID",
           receiptNumberLabel: "Receipt Number",
-          transactionId: "Transaction ID"
+          transactionId: "Transaction ID",
+          openReview: "Open Review",
+          savedOutsideFilterYear: "Receipt saved, but the issue year does not match the current filter.",
+          savedOutsideFilterMonth: "Receipt saved, but the issue month does not match the current filter."
         };
 
   const categories = [
@@ -145,6 +162,7 @@ export const ManualReceiptForm = ({ locale }: { locale: Locale }) => {
       setVendor("");
       setReceiptNumber("");
       setCategory("office");
+      router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : copy.unknown);
     } finally {
@@ -242,6 +260,25 @@ export const ManualReceiptForm = ({ locale }: { locale: Locale }) => {
           <p className="note">
             {copy.transactionId}: {result.transaction?.id ?? "-"}
           </p>
+          {(() => {
+            const issue = receiptDate;
+            if (!issue) return null;
+            const [issueYearRaw, issueMonthRaw] = issue.split("-");
+            const issueYear = Number(issueYearRaw);
+            const issueMonth = Number(issueMonthRaw);
+            if (!Number.isFinite(issueYear) || !Number.isFinite(issueMonth)) return null;
+
+            if (activeYear && issueYear !== activeYear) {
+              return <p className="badge warn">{copy.savedOutsideFilterYear}</p>;
+            }
+            if (activeMonth && issueMonth !== activeMonth) {
+              return <p className="badge warn">{copy.savedOutsideFilterMonth}</p>;
+            }
+            return null;
+          })()}
+          <Link className="button secondary" href={`/review/receipts/${result.receipt.id}`}>
+            {copy.openReview}
+          </Link>
         </div>
       )}
     </form>

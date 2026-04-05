@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { type Locale } from "@/lib/i18n/locale";
 
@@ -21,7 +23,16 @@ type UploadResponse = {
   error?: string;
 };
 
-export const ReceiptUploadForm = ({ locale }: { locale: Locale }) => {
+export const ReceiptUploadForm = ({
+  locale,
+  activeYear,
+  activeMonth
+}: {
+  locale: Locale;
+  activeYear?: number;
+  activeMonth?: number | null;
+}) => {
+  const router = useRouter();
   const copy = {
     en: {
       processing: "Processing...",
@@ -40,7 +51,10 @@ export const ReceiptUploadForm = ({ locale }: { locale: Locale }) => {
       issueDate: "Issue Date",
       amount: "Amount",
       transaction: "Transaction",
-      missingFile: "Please choose a receipt file first."
+      missingFile: "Please choose a receipt file first.",
+      openReview: "Open Review",
+      savedOutsideFilterYear: "Receipt saved, but the issue year does not match the current filter.",
+      savedOutsideFilterMonth: "Receipt saved, but the issue month does not match the current filter."
     },
     sv: {
       processing: "Bearbetar...",
@@ -59,7 +73,10 @@ export const ReceiptUploadForm = ({ locale }: { locale: Locale }) => {
       issueDate: "Utfärdandedatum",
       amount: "Belopp",
       transaction: "Transaktion",
-      missingFile: "Välj en kvittofil först."
+      missingFile: "Välj en kvittofil först.",
+      openReview: "Öppna granskning",
+      savedOutsideFilterYear: "Kvitto sparat, men utfärdandeåret matchar inte nuvarande filter.",
+      savedOutsideFilterMonth: "Kvitto sparat, men utfärdandemånaden matchar inte nuvarande filter."
     }
   } as const;
   const t = copy[locale];
@@ -87,14 +104,23 @@ export const ReceiptUploadForm = ({ locale }: { locale: Locale }) => {
         method: "POST",
         body
       });
-      const json = (await response.json()) as UploadResponse;
+      const raw = await response.text();
+      let json: UploadResponse = {};
+      if (raw) {
+        try {
+          json = JSON.parse(raw) as UploadResponse;
+        } catch {
+          json = {};
+        }
+      }
       if (!response.ok) {
-        throw new Error(json.error ?? "Upload failed");
+        throw new Error(json.error ?? (raw && !raw.startsWith("<") ? raw : "Upload failed"));
       }
       setResult(json);
       setFile(null);
       const input = document.getElementById("receipt-file") as HTMLInputElement | null;
       if (input) input.value = "";
+      router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unknown upload error");
     } finally {
@@ -142,6 +168,25 @@ export const ReceiptUploadForm = ({ locale }: { locale: Locale }) => {
           <p className={result.receipt.needsReview ? "badge warn" : "badge good"}>
             {result.receipt.needsReview ? t.needsReview : t.autoPosted}
           </p>
+          {(() => {
+            const issue = result.receipt?.receiptDate;
+            if (!issue) return null;
+            const [issueYearRaw, issueMonthRaw] = issue.split("-");
+            const issueYear = Number(issueYearRaw);
+            const issueMonth = Number(issueMonthRaw);
+            if (!Number.isFinite(issueYear) || !Number.isFinite(issueMonth)) return null;
+
+            if (activeYear && issueYear !== activeYear) {
+              return <p className="badge warn">{t.savedOutsideFilterYear}</p>;
+            }
+            if (activeMonth && issueMonth !== activeMonth) {
+              return <p className="badge warn">{t.savedOutsideFilterMonth}</p>;
+            }
+            return null;
+          })()}
+          <Link className="button secondary" href={`/review/receipts/${result.receipt.id}`}>
+            {t.openReview}
+          </Link>
         </div>
       )}
     </form>

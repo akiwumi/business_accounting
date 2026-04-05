@@ -290,7 +290,11 @@ a:hover {
 }
 
 .tableWrap {
+  width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fff;
@@ -303,6 +307,67 @@ table {
 
 .tableWrap table {
   min-width: 720px;
+}
+
+.ledgerTableWrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ledgerTableWrap table {
+  min-width: 1360px;
+}
+
+.ledgerTableWrap th,
+.ledgerTableWrap td {
+  white-space: nowrap;
+}
+
+.ledgerTotals {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.ledgerTotals p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.ledgerTotals span {
+  color: var(--muted);
+}
+
+.ledgerTotals strong {
+  font-size: 0.98rem;
+}
+
+.receiptsTableWrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.receiptsTableWrap table {
+  min-width: 1200px;
+}
+
+.receiptsTableWrap th,
+.receiptsTableWrap td {
+  white-space: nowrap;
 }
 
 th,
@@ -733,5 +798,9 @@ pre {
 
   .tableWrap table {
     min-width: 620px;
+  }
+
+  .receiptsTableWrap table {
+    min-width: 900px;
   }
 }
