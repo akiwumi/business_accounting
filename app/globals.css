@@ -289,6 +289,71 @@ a:hover {
   font-size: 0.86rem;
 }
 
+.dashboardPage {
+  gap: 18px;
+}
+
+.dashboardPage > * {
+  min-width: 0;
+}
+
+.dashboardMeta {
+  overflow-wrap: anywhere;
+}
+
+.dashboardExportRow {
+  margin-top: -4px;
+}
+
+.dashboardYearForm {
+  align-items: flex-end;
+}
+
+.dashboardYearForm > label.stack {
+  flex: 1 1 280px;
+  max-width: 340px;
+}
+
+.dashboardYearFormActions {
+  margin-left: auto;
+}
+
+.dashboardKpiGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.dashboardActivityGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+}
+
+.dashboardKpiCard {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 128px;
+}
+
+.dashboardKpiCard .label {
+  line-height: 1.35;
+  min-height: 2.4em;
+}
+
+.dashboardKpiCard .kpi {
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.dashboardWorkflowList .note {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  padding: 10px 12px;
+}
+
 .tableWrap {
   width: 100%;
   max-width: 100%;
@@ -765,6 +830,10 @@ pre {
     min-width: 68px;
   }
 
+  .dashboardKpiGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .salariesManager .row > label.stack {
     flex: 1 1 calc(50% - 10px);
   }
@@ -842,6 +911,27 @@ pre {
 
   .receiptsTableWrap table {
     min-width: 900px;
+  }
+
+  .dashboardKpiGrid,
+  .dashboardActivityGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboardKpiCard {
+    min-height: 0;
+  }
+
+  .dashboardYearForm {
+    align-items: stretch;
+  }
+
+  .dashboardYearForm > label.stack {
+    max-width: none;
+  }
+
+  .dashboardYearFormActions {
+    margin-left: 0;
   }
 
   .salariesManager .row > label.stack {
