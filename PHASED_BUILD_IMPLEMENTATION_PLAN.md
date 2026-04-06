@@ -87,6 +87,19 @@ QSTASH_NEXT_SIGNING_KEY=...
 # Observability
 SENTRY_DSN=https://...
 NEXT_PUBLIC_SENTRY_DSN=https://...
+
+# Localization / Translation
+NEXT_PUBLIC_ENABLE_LOCALE_AUTODETECT=true
+NEXT_PUBLIC_TRANSLATION_MODE=browser
+SUPPORTED_APP_LOCALES=en-GB,sv-SE,de-DE,fr-FR,es-ES,it-IT,nl-NL,pl-PL,pt-PT,da-DK,fi-FI,no-NO
+DEEPL_API_KEY=optional-for-dynamic-content
+DEEPL_API_URL=https://api-free.deepl.com/v2
+
+# Public site / support
+NEXT_PUBLIC_SITE_URL=https://akunta.com
+SUPPORT_CONTACT_EMAIL=support@akunta.com
+SUPPORT_FORM_RECIPIENT=support@akunta.com
+RESOURCES_DEFAULT_COUNTRY=SE
 ```
 
 ## 5) Target Repository Structure
@@ -615,3 +628,197 @@ The migration roadmap below must preserve Section 14 features while moving to pr
    3. Ledger totals and exports
    4. Payroll approval/pay flows
    5. Reports and annual workbook generation
+
+## 16) International, Public Site, and UX Expansion Addendum
+
+This addendum captures the newly requested scope and is now part of the baseline delivery plan.
+Where it conflicts with Section 14 (current-state baseline), this addendum takes precedence for forward implementation.
+
+## 16.1) Geographic and Tax Scope
+
+1. UK and EU must be first-class supported operating regions.
+2. Organizations outside the UK/EU must be supported through configurable tax criteria in Settings.
+3. Settings must include a country selector that drives tax profile behavior.
+4. Tax profile behavior by territory:
+   1. UK/EU countries: preload territory templates (VAT defaults, filing frequency defaults, local identifiers, baseline reporting assumptions).
+   2. Non-UK/EU countries: show a custom tax setup flow where the user defines territory-specific criteria.
+5. The app must store both:
+   1. Template-driven defaults for known countries.
+   2. User-edited overrides per organization.
+
+## 16.2) Tax Configuration Model for Non-UK/EU Territories
+
+1. Add configurable settings fields for custom jurisdictions:
+   1. Tax year start month and end month.
+   2. Standard/reduced/zero VAT or sales tax rates.
+   3. VAT registration threshold.
+   4. Filing frequency and due-day rules.
+   5. Income tax estimation rates.
+   6. Payroll contribution rates (where used).
+   7. Required registration identifiers.
+2. Allow custom labels for tax terms so the UI can adapt to local wording.
+3. Include validation and warning states when required tax fields are missing.
+
+## 16.3) Localization and Auto-Translation Strategy
+
+1. On first visit, detect user language from browser/OS (`Accept-Language` and client locale).
+2. Auto-apply a supported UK/EU locale when available, while still allowing manual language override.
+3. Translation approach priority:
+   1. First preference: browser translation support for site pages.
+   2. Optional enhancement: DeepL for controlled translation workflows.
+4. Implement browser-translation-friendly behavior:
+   1. Correct `lang` attributes.
+   2. Semantic HTML and clean text nodes.
+   3. No blockers that prevent browser translation engines from working.
+5. If DeepL is enabled:
+   1. Use it for dynamic content translation where needed.
+   2. Cache translated outputs.
+   3. Keep source language fallback if translation fails.
+6. UK/EU language support rollout target:
+   1. Start with `en-GB` + key EU languages in wave 1.
+   2. Expand coverage in later waves as quality is verified.
+
+## 16.4) Authentication and Landing Page Restructure
+
+1. Remove login-from-splash as the primary entry flow.
+2. Move sign-in entry to the public landing page.
+3. Keep a direct sign-in route (`/sign-in`) as a fallback path.
+4. Route architecture target:
+   1. Public marketing experience under `/`.
+   2. Authenticated product workspace under `/app` (or `/dashboard`) with existing accounting modules.
+5. Keep transition animations subtle and consistent between landing, sign-in, and app shell.
+
+## 16.5) Branding Requirement
+
+1. Use Akunta logo branding consistently across all pages (public + authenticated).
+2. Keep brand usage consistent in:
+   1. Header/nav
+   2. Footer
+   3. Auth surfaces
+   4. Email templates
+   5. PDFs where relevant
+
+## 16.6) New Public-Site Pages and Content Requirements
+
+1. Landing page (`/`) must include:
+   1. Short impactful introduction focused on simplicity.
+   2. Primary call-to-action button.
+   3. Sign-in action.
+   4. Features section listing core app features.
+   5. Latest 4 blog posts section.
+   6. Testimonials section showing 5 testimonials at a time.
+2. Add Help pages:
+   1. `/help` index.
+   2. `/help/[slug]` detail pages.
+3. Add Support page:
+   1. `/support` with contact form.
+   2. Backend support submission workflow (ticket/email).
+4. Add Blog pages:
+   1. `/blog` listing.
+   2. `/blog/[slug]` article pages.
+5. Add Resources page:
+   1. `/resources` with tax and small-business links.
+   2. Country-aware resource filtering based on detected/selected country.
+   3. Manual country override in UI.
+
+## 16.7) Data and Content Model Additions
+
+1. Add territory/tax profile tables:
+   1. `country_tax_templates`
+   2. `organization_tax_profiles`
+   3. `organization_tax_profile_rules`
+2. Add public content tables:
+   1. `blog_posts`
+   2. `blog_post_translations`
+   3. `help_articles`
+   4. `help_article_translations`
+   5. `testimonials`
+3. Add support and resources tables:
+   1. `support_tickets`
+   2. `support_messages`
+   3. `resource_links` (country, category, language, URL, verification metadata)
+
+## 16.8) Repository Structure Additions
+
+Add/extend structure for public pages and content domain:
+
+```text
+app/
+  (public)/
+    page.tsx                    # Landing page
+    sign-in/page.tsx
+    help/page.tsx
+    help/[slug]/page.tsx
+    support/page.tsx
+    blog/page.tsx
+    blog/[slug]/page.tsx
+    resources/page.tsx
+  (app)/
+    layout.tsx
+    page.tsx                    # Authenticated dashboard
+    receipts/page.tsx
+    invoices/page.tsx
+    ledger/page.tsx
+
+components/
+  public/
+    Hero.tsx
+    FeatureGrid.tsx
+    TestimonialCarousel.tsx
+    LatestPosts.tsx
+    CountryResourceLinks.tsx
+    SupportForm.tsx
+  layout/
+    BrandHeader.tsx
+    BrandFooter.tsx
+
+lib/
+  i18n/
+    detect.ts
+    locales.ts
+    deepl.ts
+  tax/
+    templates/
+      eu/
+      uk/
+      custom/
+  content/
+    blog.ts
+    help.ts
+    resources.ts
+```
+
+## 16.9) Phase Mapping for New Scope
+
+Integrate new scope into existing phases as follows:
+
+1. Phase 1 (Auth and Multi-Tenancy):
+   1. Implement public/app route split.
+   2. Move sign-in entry to landing.
+   3. Retain direct `/sign-in` route.
+2. Phase 2 (Core Accounting Domain):
+   1. Add country-aware tax profile schema.
+   2. Implement UK/EU template loading + non-UK/EU custom criteria fields.
+3. Phase 3 (OCR Pipeline):
+   1. Ensure parsing/posting remains compatible with country tax profile settings.
+4. Phase 4 (Invoicing and Ledger):
+   1. Apply country/tax-profile constraints in calculations and defaults.
+5. Phase 5 (Reporting and Exports):
+   1. Add country-aware report labels/logic where applicable.
+6. Phase 7 (Mobile-First UX):
+   1. Optimize landing/help/support/blog/resources for small screens.
+7. Phase 8 (Hardening and Launch):
+   1. Add regression checks for localization detection, translation fallbacks, and country tax-profile workflows.
+8. New content stream (runs parallel across Phases 4-8):
+   1. Build and populate Help, Blog, Testimonials, and Resources content pipelines.
+
+## 16.10) Acceptance Criteria for This Addendum
+
+1. A UK/EU user gets country-appropriate tax defaults from Settings.
+2. A non-UK/EU user can fully define tax criteria for their territory in Settings.
+3. Language defaults to detected browser/OS locale for supported UK/EU languages.
+4. Browser translation works cleanly on public and app pages.
+5. Landing page contains intro, CTA, sign-in, features, 4 latest posts, and 5-visible testimonials.
+6. Help, Support, Blog, and Resources pages are live and mobile-optimized.
+7. Resources are country-aware and user-overridable.
+8. Akunta branding is consistent on every page.
